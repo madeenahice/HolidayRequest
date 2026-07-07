@@ -551,6 +551,10 @@
             return users.find((user) => user.id === userId);
         }
 
+        function normalizeName(value) {
+            return String(value || '').replace(/\s+/g, '').trim();
+        }
+
         function requestAppsScriptJsonp(action, params = {}) {
             if (!GOOGLE_SHEET_LOG_URL) {
                 return Promise.resolve({ ok: false, message: 'ยังไม่ได้ตั้งค่า Google Apps Script Web App URL' });
@@ -662,7 +666,7 @@
             return users.find((user) => (
                 String(record.userId || '') && String(user.id) === String(record.userId)
             )) || users.find((user) => (
-                user.name === record.name
+                normalizeName(user.name) === normalizeName(record.name)
                 && user.department === record.department
                 && user.position === record.position
                 && user.level === record.level
@@ -675,16 +679,17 @@
                     const user = findUserByRequestRecord(request);
                     const startDate = String(request.startDate || '').trim();
                     const endDate = String(request.endDate || startDate).trim();
-                    if (!user || !startDate || !endDate) return null;
+                    if (!startDate || !endDate) return null;
                     return {
                         id: Number(request.id) || request.id,
-                        userId: user.id,
+                        userId: user ? user.id : '',
+                        name: request.name || (user ? user.name : ''),
                         startDate,
                         endDate,
                         dates: getDateRange(startDate, endDate),
-                        department: request.department || user.department,
-                        position: request.position || user.position,
-                        level: request.level || user.level,
+                        department: request.department || (user ? user.department : ''),
+                        position: request.position || (user ? user.position : ''),
+                        level: request.level || (user ? user.level : ''),
                         leaveType: request.leaveType || '',
                         trainingNote: request.trainingNote || '',
                         status: request.status || 'Approved',
@@ -834,7 +839,7 @@
             return {
                 requestId: request.id,
                 userId: request.userId,
-                name: user ? user.name : '',
+                name: user ? user.name : (request.name || ''),
                 department: request.department,
                 position: request.position,
                 level: request.level,
@@ -952,7 +957,7 @@
         function getRequestTooltip(request) {
             const user = findUserById(request.userId);
             const trainingText = request.trainingNote ? ` | หมายเหตุ: ${request.trainingNote}` : '';
-            return `${user ? user.name : 'ผู้ใช้'} | ${request.department} | ${request.position} | ${request.level} | ${request.leaveType || '-'}${trainingText} | ${getRequestDateText(request)} | ${request.status === 'Pending' ? 'ตัวสำรอง' : 'อนุมัติ'}`;
+            return `${user ? user.name : (request.name || 'ผู้ใช้')} | ${request.department} | ${request.position} | ${request.level} | ${request.leaveType || '-'}${trainingText} | ${getRequestDateText(request)} | ${request.status === 'Pending' ? 'ตัวสำรอง' : 'อนุมัติ'}`;
         }
 
         function openDayDetail(dateStr, requests) {
@@ -976,7 +981,7 @@
                     const trainingText = request.trainingNote ? `<div class="text-xs opacity-80">หมายเหตุ: ${request.trainingNote}</div>` : '';
                     return `
                         <div class="rounded-lg border p-3 ${colorStyle.bg}">
-                            <div class="font-bold">${request.status === 'Pending' ? '[รอ] ' : ''}${user ? user.name : 'ผู้ใช้'}</div>
+                            <div class="font-bold">${request.status === 'Pending' ? '[รอ] ' : ''}${user ? user.name : (request.name || 'ผู้ใช้')}</div>
                             <div class="text-xs opacity-80">${request.leaveType || '-'} • ${request.level} • ${request.position} • ${request.department}</div>
                             <div class="text-xs opacity-80">${getRequestDateText(request)}</div>
                             ${trainingText}
@@ -1629,7 +1634,7 @@
                     startingSegments.forEach((segment) => {
                         const request = segment.request;
                         const user = findUserById(request.userId);
-                        if (!user) return;
+                        const displayName = user ? user.name : (request.name || 'ผู้ใช้');
 
                         const colorStyle = getRequestColorStyle(request);
                         const levelLabel = request.level.replace('Level ', 'L');
@@ -1641,7 +1646,7 @@
                         item.style.width = `calc(${span * 100}% + ${endEdgeExtraRem}rem)`;
                         item.className = `absolute left-0 z-20 h-6 text-[10px] leading-4 p-1 rounded-md border ${colorStyle.bg} transition-all truncate whitespace-nowrap shadow-sm`;
                         item.title = getRequestTooltip(request);
-                        item.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full ${colorStyle.dot} mr-1"></span><span class="font-bold">${request.status === 'Pending' ? '[รอ] ' : ''}${user.name}</span> <span class="opacity-80">• ${request.leaveType || '-'} • ${levelLabel}${isMultiDay ? ` • ${getRequestDateText(request)}` : ''}</span>`;
+                        item.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full ${colorStyle.dot} mr-1"></span><span class="font-bold">${request.status === 'Pending' ? '[รอ] ' : ''}${displayName}</span> <span class="opacity-80">• ${request.leaveType || '-'} • ${levelLabel}${isMultiDay ? ` • ${getRequestDateText(request)}` : ''}</span>`;
                         item.addEventListener('click', (event) => {
                             event.stopPropagation();
                             openDayDetail(fullDateStr, dayRequests);
@@ -2065,12 +2070,13 @@
 
             container.innerHTML = pending.map((request) => {
                 const user = findUserById(request.userId);
+                const displayName = user ? user.name : (request.name || 'ผู้ใช้');
                 const trainingText = request.trainingNote ? ` • หมายเหตุ: ${request.trainingNote}` : '';
                 return `
                     <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
                         <div class="flex items-center justify-between gap-3">
                             <div>
-                                <div class="font-semibold text-amber-800">${user ? user.name : 'ผู้ใช้'}</div>
+                                <div class="font-semibold text-amber-800">${displayName}</div>
                                 <div class="text-xs text-amber-700">วันที่ ${getRequestDateText(request)} • ${request.department} • ${request.position || (user ? user.position : '')} • ${request.leaveType || '-'}${trainingText} • Level ${request.level} • สถานะตัวสำรอง</div>
                             </div>
                             <button onclick="approveReserveRequest(${request.id})" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">อนุมัติ</button>
