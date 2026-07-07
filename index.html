@@ -475,9 +475,9 @@
                 if (currentRole === 'user') {
                     const password = prompt('กรุณาใส่รหัส Admin');
                     if (!password) return;
-                    const isValidAdmin = await verifyAdminPassword(password);
-                    if (!isValidAdmin) {
-                        alert('รหัส Admin ไม่ถูกต้อง');
+                    const adminCheck = await verifyAdminPassword(password);
+                    if (!adminCheck.ok) {
+                        alert(adminCheck.message);
                         return;
                     }
                     setRole('admin');
@@ -570,8 +570,10 @@
 
         function verifyAdminPassword(password) {
             if (!GOOGLE_SHEET_LOG_URL) {
-                alert('ยังไม่ได้ตั้งค่า Google Apps Script Web App URL');
-                return Promise.resolve(false);
+                return Promise.resolve({
+                    ok: false,
+                    message: 'ยังไม่ได้ตั้งค่า Google Apps Script Web App URL'
+                });
             }
 
             return new Promise((resolve) => {
@@ -579,7 +581,10 @@
                 const script = document.createElement('script');
                 const timeoutId = setTimeout(() => {
                     cleanup();
-                    resolve(false);
+                    resolve({
+                        ok: false,
+                        message: 'เชื่อมต่อ Apps Script ไม่ได้ หรือ Web App ยังไม่ใช่เวอร์ชันล่าสุด'
+                    });
                 }, 10000);
 
                 function cleanup() {
@@ -590,16 +595,27 @@
 
                 window[callbackName] = (response) => {
                     cleanup();
-                    resolve(Boolean(response && response.ok));
+                    if (response && response.ok) {
+                        resolve({ ok: true, message: '' });
+                        return;
+                    }
+                    resolve({
+                        ok: false,
+                        message: 'รหัส Admin ไม่ถูกต้อง หรือ Apps Script ยังไม่พบค่า ADMIN_PASSWORD'
+                    });
                 };
 
                 const url = new URL(GOOGLE_SHEET_LOG_URL);
                 url.searchParams.set('action', 'verifyAdmin');
-                url.searchParams.set('password', password);
+                url.searchParams.set('password', password.trim());
                 url.searchParams.set('callback', callbackName);
+                url.searchParams.set('_', Date.now());
                 script.onerror = () => {
                     cleanup();
-                    resolve(false);
+                    resolve({
+                        ok: false,
+                        message: 'โหลด Apps Script ไม่สำเร็จ กรุณาตรวจ Web App URL และสิทธิ์ Anyone'
+                    });
                 };
                 script.src = url.toString();
                 document.body.appendChild(script);
