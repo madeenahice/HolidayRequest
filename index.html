@@ -16,6 +16,9 @@
                 <span class="text-xs md:text-sm bg-teal-700 px-3 py-1.5 rounded-full">
                     สถานะปัจจุบัน: <strong id="current-role-text">พนักงานทั่วไป (User)</strong>
                 </span>
+                <span id="realtime-status" class="text-xs bg-teal-700/80 px-3 py-1.5 rounded-full">
+                    Realtime: กำลังเชื่อมต่อ
+                </span>
                 <button id="btn-toggle-role" class="bg-amber-500 hover:bg-amber-600 text-white font-medium px-3 md:px-4 py-1.5 rounded-lg text-sm shadow transition">
                     <i class="fa-solid fa-user-gear mr-1"></i> สลับเป็น Admin
                 </button>
@@ -310,6 +313,9 @@
         let pendingReserveData = null;
         let pendingPromoteData = null;
         let heatmapDetailCache = {};
+        let realtimeTimerId = null;
+        let realtimeRefreshTimerId = null;
+        let lastRealtimeSignature = '';
 
         const levelColors = {
             'Level 1': { bg: 'bg-sky-50 text-sky-700 border-sky-200', dot: 'bg-sky-500' },
@@ -340,6 +346,7 @@
             renderLeaveTypeDropdown();
             setupEventListeners();
             await loadStaffFromSheet();
+            await loadShiftRequestsFromSheet({ silent: false });
             renderPositionDropdowns();
             renderUserDropdowns();
             renderAdminTable();
@@ -347,6 +354,7 @@
             renderAdminReserveQueue();
             renderLevelLegend();
             renderCalendar();
+            startRealtimeSync();
         });
 
         function formatDateInput(date) {
@@ -650,6 +658,105 @@
             });
         }
 
+        function findUserByRequestRecord(record) {
+            return users.find((user) => (
+                String(record.userId || '') && String(user.id) === String(record.userId)
+            )) || users.find((user) => (
+                user.name === record.name
+                && user.department === record.department
+                && user.position === record.position
+                && user.level === record.level
+            ));
+        }
+
+        function normalizeShiftRequests(nextRequests) {
+            return (nextRequests || [])
+                .map((request) => {
+                    const user = findUserByRequestRecord(request);
+                    const startDate = String(request.startDate || '').trim();
+                    const endDate = String(request.endDate || startDate).trim();
+                    if (!user || !startDate || !endDate) return null;
+                    return {
+                        id: Number(request.id) || request.id,
+                        userId: user.id,
+                        startDate,
+                        endDate,
+                        dates: getDateRange(startDate, endDate),
+                        department: request.department || user.department,
+                        position: request.position || user.position,
+                        level: request.level || user.level,
+                        leaveType: request.leaveType || '',
+                        trainingNote: request.trainingNote || '',
+                        status: request.status || 'Approved',
+                        timestamp: request.timestamp ? new Date(request.timestamp) : new Date(0)
+                    };
+                })
+                .filter(Boolean)
+                .sort(compareRequestsByLevelThenTime);
+        }
+
+        function getRealtimeSignature(requests = shiftRequests) {
+            return JSON.stringify(requests.map((request) => [
+                request.id,
+                request.userId,
+                request.startDate,
+                request.endDate,
+                request.status,
+                request.leaveType,
+                request.trainingNote
+            ]));
+        }
+
+        async function loadShiftRequestsFromSheet({ silent = true } = {}) {
+            const response = await requestAppsScriptJsonp('getRequests');
+            if (!response || !response.ok) {
+                updateRealtimeStatus(false);
+                if (!silent) alert(response?.message || 'โหลดข้อมูลคำขอเวรจาก Google Sheet ไม่สำเร็จ');
+                return false;
+            }
+
+            const nextRequests = normalizeShiftRequests(response.requests || []);
+            const nextSignature = getRealtimeSignature(nextRequests);
+            updateRealtimeStatus(true, nextRequests.length);
+            if (nextSignature === lastRealtimeSignature) return true;
+
+            shiftRequests = nextRequests;
+            lastRealtimeSignature = nextSignature;
+            renderCalendar();
+            renderAdminReserveQueue();
+            if (!document.getElementById('admin-heatmap-view').classList.contains('hidden')) {
+                renderAdminHeatmap(false);
+            }
+            return true;
+        }
+
+        function startRealtimeSync() {
+            if (realtimeTimerId) clearInterval(realtimeTimerId);
+            realtimeTimerId = setInterval(() => {
+                loadShiftRequestsFromSheet();
+            }, 5000);
+        }
+
+        function updateRealtimeStatus(isConnected, requestCount = shiftRequests.length) {
+            const status = document.getElementById('realtime-status');
+            if (!status) return;
+            if (!isConnected) {
+                status.className = 'text-xs bg-red-500/90 px-3 py-1.5 rounded-full';
+                status.innerText = 'Realtime: ขาดการเชื่อมต่อ';
+                return;
+            }
+            const timeText = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            status.className = 'text-xs bg-emerald-600 px-3 py-1.5 rounded-full';
+            status.innerText = `Realtime: ${requestCount} รายการ • ${timeText}`;
+        }
+
+        function scheduleRealtimeRefresh() {
+            clearTimeout(realtimeRefreshTimerId);
+            realtimeRefreshTimerId = setTimeout(() => {
+                loadShiftRequestsFromSheet();
+            }, 1500);
+        }
+
         function logAction(action, detail = {}) {
             const payload = {
                 timestamp: new Date().toISOString(),
@@ -668,9 +775,11 @@
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify(payload)
-            }).catch((error) => {
-                console.warn('Cannot write log to Google Sheet', error);
-            });
+            })
+                .then(() => scheduleRealtimeRefresh())
+                .catch((error) => {
+                    console.warn('Cannot write log to Google Sheet', error);
+                });
         }
 
         function requestAdminPassword() {
@@ -724,6 +833,7 @@
             const user = findUserById(request.userId);
             return {
                 requestId: request.id,
+                userId: request.userId,
                 name: user ? user.name : '',
                 department: request.department,
                 position: request.position,
