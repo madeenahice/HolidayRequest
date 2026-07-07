@@ -1,0 +1,1607 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบขอเวรและจัดการคิวสำรอง</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans min-h-screen">
+
+    <nav class="bg-teal-600 text-white shadow-md p-3 md:p-4 sticky top-0 z-50">
+        <div class="container mx-auto flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
+            <h1 class="text-lg md:text-xl font-bold leading-snug"><i class="fa-solid fa-calendar-days mr-2"></i>ระบบขอเวร / จองวันหยุด</h1>
+            <div class="flex flex-wrap items-center gap-2 md:gap-4">
+                <span class="text-xs md:text-sm bg-teal-700 px-3 py-1.5 rounded-full">
+                    สถานะปัจจุบัน: <strong id="current-role-text">พนักงานทั่วไป (User)</strong>
+                </span>
+                <button id="btn-toggle-role" class="bg-amber-500 hover:bg-amber-600 text-white font-medium px-3 md:px-4 py-1.5 rounded-lg text-sm shadow transition">
+                    <i class="fa-solid fa-user-gear mr-1"></i> สลับเป็น Admin
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto p-3 md:p-6 grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6">
+        
+        <div class="space-y-6">
+            
+            <div id="user-info-box" class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-xl shadow-sm">
+                <h3 class="font-bold text-blue-800 mb-1"><i class="fa-solid fa-circle-info mr-1"></i> กฎการขอเวร</h3>
+                <ul class="text-xs text-blue-700 space-y-1 list-disc list-inside">
+                    <li>ขอเวรได้ไม่เกิน 6 เดือนล่วงหน้า</li>
+                    <li>ต้องขอภายในวันที่ 25 ของ 2 เดือนก่อนเดือนเวร เช่น เวรสิงหาคมต้องขอภายใน 25 มิถุนายน</li>
+                    <li>Admin สามารถบันทึกหรือแก้ไขวันขอเวรได้โดยไม่จำกัดช่วงวันที่</li>
+                    <li>หน่วยงานเดียวกัน ตำแหน่งเดียวกัน และ Level เดียวกัน ขอซ้ำได้ไม่เกิน 2 คน/วัน ยกเว้น Level 5 ได้ไม่เกิน 3 คน/วัน</li>
+                    <li class="font-bold text-red-600">หากต้องการยกเลิกเวร กรุณาติดต่อแอดมินเท่านั้น</li>
+                </ul>
+            </div>
+
+            <div id="form-section" class="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-100">
+                <h2 class="text-lg font-bold text-gray-700 mb-4 flex items-center gap-2">
+                    <i class="fa-regular fa-calendar-plus text-teal-600"></i> ยื่นคำขอเวร
+                </h2>
+                <form id="shift-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">เลือกหน่วยงาน</label>
+                        <select id="form-department-select" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">เลือกตำแหน่ง</label>
+                        <select id="form-position-select" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">เลือกเจ้าหน้าที่</label>
+                        <select id="form-user-select" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">วันเริ่มต้น</label>
+                        <input type="date" id="form-start-date" required class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">วันสิ้นสุด</label>
+                        <input type="date" id="form-end-date" required class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                        <p class="text-[11px] text-gray-400 mt-1">ผู้ใช้ทั่วไปขอได้ไม่เกิน 6 เดือน และต้องทันรอบวันที่ 25</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">เวรที่ขอ</label>
+                        <select id="form-leave-type" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none"></select>
+                    </div>
+                    <button type="submit" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-xl shadow-md shadow-teal-100 transition">
+                        ส่งคำขอเวร
+                    </button>
+                </form>
+            </div>
+
+            <div id="admin-section" class="bg-white p-4 md:p-6 rounded-2xl shadow-sm border-2 border-amber-400 hidden space-y-6">
+                <div>
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <h2 class="text-lg font-bold text-amber-600 flex items-center gap-2">
+                            <i class="fa-solid fa-users-gear"></i> [Admin] จัดการเจ้าหน้าที่ หน่วยงาน & Level
+                        </h2>
+                        <button id="btn-admin-settings" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition">
+                            <i class="fa-solid fa-gear mr-1"></i> จัดการเจ้าหน้าที่
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="text-md font-bold text-amber-700 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-list-check"></i> [Admin] รายการตัวสำรอง / รอพิจารณา
+                    </h3>
+                    <div id="admin-reserve-queue" class="space-y-2"></div>
+                </div>
+            </div>
+
+        </div>
+
+        <div id="calendar-view" class="xl:col-span-2 bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col min-w-0">
+            <div class="flex justify-between items-center gap-2 mb-4 md:mb-6">
+                <button id="btn-prev-month" class="p-2 hover:bg-gray-100 rounded-full transition"><i class="fa-solid fa-chevron-left"></i></button>
+                <h2 id="calendar-month-year" class="text-base md:text-xl font-bold text-gray-800 text-center">กรกฎาคม 2026</h2>
+                <button id="btn-next-month" class="p-2 hover:bg-gray-100 rounded-full transition"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+
+            <div id="level-legend" class="flex flex-wrap gap-2 mb-4 text-xs"></div>
+
+            <div class="overflow-x-auto pb-2">
+                <div class="min-w-[760px]">
+                    <div class="grid grid-cols-7 gap-2 text-center font-bold text-sm text-gray-500 mb-2">
+                        <div>อา.</div><div>จ.</div><div>อ.</div><div>พ.</div><div>พฤ.</div><div>ศ.</div><div>ส.</div>
+                    </div>
+                    <div id="calendar-days" class="grid grid-cols-7 gap-2 flex-grow"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="admin-management-view" class="xl:col-span-2 bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-amber-200 hidden min-w-0">
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
+                <h2 class="text-lg md:text-xl font-bold text-amber-700 flex items-center gap-2">
+                    <i class="fa-solid fa-users-gear"></i> จัดการเจ้าหน้าที่
+                </h2>
+                <button id="btn-back-calendar" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-semibold transition">
+                    <i class="fa-solid fa-calendar-days mr-1"></i> กลับไปปฏิทิน
+                </button>
+            </div>
+
+            <div class="overflow-auto max-h-[520px] border border-gray-100 rounded-xl">
+                <table class="w-[900px] md:w-full text-sm text-left">
+                    <thead class="bg-gray-50 text-gray-600 font-medium sticky top-0 z-10">
+                        <tr>
+                            <th class="p-3">ชื่อ</th>
+                            <th class="p-3">หน่วยงาน</th>
+                            <th class="p-3">ตำแหน่ง</th>
+                            <th class="p-3">Level</th>
+                            <th class="p-3">ลบ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="admin-user-table" class="divide-y divide-gray-100"></tbody>
+                </table>
+            </div>
+
+            <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-4">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 class="font-bold text-amber-800">เพิ่มข้อมูล</h3>
+                    <div class="flex gap-2">
+                        <select id="admin-add-type" class="p-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500">
+                            <option value="user">เจ้าหน้าที่</option>
+                            <option value="department">หน่วยงาน</option>
+                            <option value="position">ตำแหน่ง</option>
+                            <option value="level">Level</option>
+                        </select>
+                        <button id="btn-show-add-panel" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">เพิ่ม</button>
+                    </div>
+                </div>
+
+                <div id="admin-add-panel" class="hidden rounded-lg bg-white p-3 border border-amber-100">
+                    <div id="admin-add-user-panel">
+                        <h4 class="font-bold text-amber-800 mb-2">เพิ่มเจ้าหน้าที่</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                            <input id="admin-add-user-name" placeholder="ชื่อ-สกุล" class="p-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500">
+                            <select id="admin-add-user-department" class="p-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500"></select>
+                            <select id="admin-add-user-position" class="p-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500"></select>
+                            <select id="admin-add-user-level" class="p-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500"></select>
+                        </div>
+                        <button onclick="addAdminUser()" class="mt-2 bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">เพิ่มรายชื่อ</button>
+                    </div>
+
+                    <div id="admin-add-department-panel" class="hidden">
+                        <h4 class="font-bold text-amber-800 mb-2">เพิ่มหน่วยงาน</h4>
+                        <div class="flex gap-2">
+                            <input id="admin-add-department" placeholder="ชื่อหน่วยงาน" class="min-w-0 flex-1 p-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500">
+                            <button onclick="addDepartment()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 rounded-lg text-xs font-semibold">เพิ่ม</button>
+                        </div>
+                    </div>
+
+                    <div id="admin-add-position-panel" class="hidden">
+                        <h4 class="font-bold text-amber-800 mb-2">เพิ่มตำแหน่ง</h4>
+                        <div class="flex gap-2">
+                            <input id="admin-add-position" placeholder="ชื่อตำแหน่ง" class="min-w-0 flex-1 p-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500">
+                            <button onclick="addPosition()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 rounded-lg text-xs font-semibold">เพิ่ม</button>
+                        </div>
+                    </div>
+
+                    <div id="admin-add-level-panel" class="hidden">
+                        <h4 class="font-bold text-amber-800 mb-2">เพิ่ม Level</h4>
+                        <div class="flex gap-2">
+                            <input id="admin-add-level" placeholder="ชื่อ Level" class="min-w-0 flex-1 p-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500">
+                            <button onclick="addLevel()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 rounded-lg text-xs font-semibold">เพิ่ม</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 id="admin-selected-list-title" class="font-bold text-amber-800 mb-2">รายการเดิม</h3>
+                    <div id="admin-selected-list" class="space-y-1 max-h-64 overflow-y-auto"></div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <div id="reserve-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl text-center transform scale-95 transition-transform">
+            <div class="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 class="text-xl font-bold text-gray-800 mb-2">โค้วต้าเต็ม</h3>
+            <p class="text-gray-600 mb-6 text-sm leading-relaxed">
+                กดยืนยันเพื่อเป็นตัวสำรอง หรือยกเลิก
+            </p>
+            <div class="flex gap-3">
+                <button id="btn-reserve-cancel" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition">ยกเลิก</button>
+                <button id="btn-reserve-confirm" class="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl shadow-md shadow-amber-100 transition">ยืนยัน</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="promote-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl transform scale-95 transition-transform">
+            <div class="w-16 h-16 bg-teal-100 text-teal-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
+                <i class="fa-solid fa-circle-check"></i>
+            </div>
+            <h3 class="text-xl font-bold text-gray-800 mb-2 text-center">โควตากลุ่มว่างลงแล้ว!</h3>
+            <p id="promote-modal-text" class="text-gray-600 mb-6 text-sm leading-relaxed text-center">
+                ตรวจพบตัวสำรองคิวแรก... คุณต้องการเลื่อนสิทธิ์ให้เป็นตัวจริงทันทีหรือไม่?
+            </p>
+            <div class="flex gap-3">
+                <button id="btn-promote-skip" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition">ข้ามไปก่อน</button>
+                <button id="btn-promote-confirm" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-xl shadow-md shadow-teal-100 transition">ยืนยันเลื่อนสิทธิ์</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="day-detail-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-5 shadow-xl">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <h3 id="day-detail-title" class="text-lg font-bold text-gray-800">รายการขอเวร</h3>
+                <button id="btn-day-detail-close" class="text-gray-400 hover:text-gray-700 text-xl leading-none">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="day-detail-list" class="space-y-2 max-h-[70vh] overflow-y-auto"></div>
+        </div>
+    </div>
+
+
+    <script>
+        let users = [
+            { id: 1, name: "พว.จาตุรง พิมโคตร", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 5" },
+            { id: 2, name: "พว.อารียา บุญพระ", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 5" },
+            { id: 3, name: "พว.พีรยา บัวขาว", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 5" },
+            { id: 4, name: "พว. สุจิตรา ลำมะนา", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 5" },
+            { id: 5, name: "พว.ผกาวรรณ ไชยธรรม", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 5" },
+            { id: 6, name: "พว.ณัฐธิชา หาญเชิงชัย", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 5" },
+            { id: 7, name: "พว.มัฌติกา ทองแก้ว", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 5" },
+            { id: 8, name: "พว.อมรรัตน์ จันทคาม", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 5" },
+            { id: 9, name: "พว.วรรณทิวา เผ่ามณี", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 5" },
+            { id: 10, name: "พว.ช่อลัดดา ชำนาญพล", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 5" },
+            { id: 11, name: "พว.ศิริลักษณ์ เพ็งอินทร์", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 5" },
+            { id: 12, name: "พว.วรรณพร ฬานันท์", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 4" },
+            { id: 13, name: "พว.เพ็ญพิชชา เจียมจรรยา", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 4" },
+            { id: 14, name: "พว.เจนจิรา เจริญแพทย์", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 4" },
+            { id: 15, name: "พว.พรธิดี บัวคำ", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 4" },
+            { id: 16, name: "พว.ภัคคีมา ทรัพย์เมือง", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 4" },
+            { id: 17, name: "พว.ณัฎฐธิดา น้อยศรี", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 3" },
+            { id: 18, name: "พว.ธงชัย เกษลา", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 3" },
+            { id: 19, name: "พว.ชัยภัทร บุญตันกัน", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 3" },
+            { id: 20, name: "พว.กชกร เยือกเย็น", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 3" },
+            { id: 21, name: "พว.กัณฑิยา แซ่เล้า", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 3" },
+            { id: 22, name: "พว.ศาธิตา บุตรสุด", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 2" },
+            { id: 23, name: "พว.ลักษิกา ชูรีรักษ์", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 2" },
+            { id: 24, name: "พว. ประภัสสร ธัญญานนท์", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 2" },
+            { id: 25, name: "พว.ภัคจิรา อังคณานันท์", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 2" },
+            { id: 26, name: "พว.ลักษมณ ป้องบุญจันทร์", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 2" },
+            { id: 27, name: "พว.ณัฐนพิน บุญประสพ", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 2" },
+            { id: 28, name: "พว.โปษิณ ท่าทราย", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 2" },
+            { id: 29, name: "พว.กัลติษา บุญมณี", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 1" },
+            { id: 30, name: "พว.พิชญานิน เดชบุญญาภิชาติ", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 1" },
+            { id: 31, name: "พว.ณัฐวดี แก้วไสว (วีนัส)", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 1" },
+            { id: 32, name: "พว.พิมพ์นารา ศรีน้ำเงิน (พิม)", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 1" },
+            { id: 33, name: "พว.กวินทร์ธิดา ทุอุดม (หมิว)", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 1" },
+            { id: 34, name: "พว.ยุวดี สุวรรณเจริญ", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 1" },
+            { id: 35, name: "พว.สุนทรี ดำรงศักดิ์ (มีดะ)", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 1" },
+            { id: 36, name: "พว.พิมพ์พิสุทธิ์ แสงแก้ว (ปิ่น)", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 1" },
+            { id: 37, name: "พว.ญาสุมินทร์ สุขาฤดี(ปริ้น)", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 1" },
+            { id: 38, name: "พว.ทักษิณ ศรีโรจน์รัตนาวดี(โก้)", department: "อุบัติเหตุและฉุกเฉิน", position: "พยาบาล", level: "Level 1" },
+            { id: 39, name: "พว.พรสินี พุทธโชติ", department: "รับ-ส่งต่อ", position: "พยาบาล", level: "Level 4" },
+            { id: 40, name: "พว.ธันย์ชนก อัศวโสวรรณ", department: "รับ-ส่งต่อ", position: "พยาบาล", level: "Level 3" },
+            { id: 41, name: "พว.อลิสา พันธุ์สถิต", department: "รับ-ส่งต่อ", position: "พยาบาล", level: "Level 1" },
+            { id: 42, name: "พว.ศิกลภัทร ใจสยะ", department: "รับ-ส่งต่อ", position: "พยาบาล", level: "Level 1" },
+            { id: 43, name: "คุณสถิต สาทอน", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 44, name: "คุณสำเริง คงศิลา", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 45, name: "คุณกรอุมา ไกรเพชร", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 46, name: "คุณ เด่นชัย ชารีธรรม", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 47, name: "คุณสมจิตร ตะวงษา", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 48, name: "คุณลลิตา เบ็ญพาด", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 49, name: "คุณจิรัชพรรณ์ จั่นทอง", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 50, name: "คุณจิรัชพรรณ์ จั่นทอง", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 51, name: "คุณวิทวัส ซ้ายสนาม", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 52, name: "คุณสุภจิรา เตโพธิ์", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 53, name: "คุณสุณี ตรุรักษ์", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 54, name: "คุณรัชนีกรณ์ เวียงลอ", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 55, name: "คุณพรรษา ภูตาเลิศ", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 1" },
+            { id: 56, name: "คุณวัชรวิชญ์ ถมคำ", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 1" },
+            { id: 57, name: "คุณวชรวรรณ โชติชนะกรกุล", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 1" },
+            { id: 58, name: "คุณณัฐธชา อุปา", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 1" },
+            { id: 59, name: "คุณมนฤดี ม่วงเจริญ", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 1" },
+            { id: 60, name: "คุณบุศรา คำศรี", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 1" },
+            { id: 61, name: "คุณศุภรดา รักษาภักดี", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 1" },
+            { id: 62, name: "คุณธนัชพงษ์ ทองขาว", department: "อุบัติเหตุและฉุกเฉิน", position: "ผู้ช่วยพยาบาล", level: "Level 1" },
+            { id: 63, name: "คุณธนกร เรืองเนตร", department: "รับ-ส่งต่อ", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 64, name: "คุณชญชล ชววรฉัฐ", department: "รับ-ส่งต่อ", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 65, name: "คุณณัฐวุฒิ มาตนอก", department: "รับ-ส่งต่อ", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 66, name: "คุณธิฌากร อุปนันชัย", department: "รับ-ส่งต่อ", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 67, name: "คุณกัญญารัตน์ ทุมวรรณ", department: "รับ-ส่งต่อ", position: "ผู้ช่วยพยาบาล", level: "Level 2" },
+            { id: 68, name: "คุณเจษฎา ศรีอ่อน", department: "รับ-ส่งต่อ", position: "ผู้ช่วยพยาบาล", level: "Level 2" }
+        ];
+        users = users
+            .filter((user, index, allUsers) => (
+                allUsers.findIndex((item) => item.name === user.name && item.department === user.department && item.position === user.position && item.level === user.level) === index
+            ))
+            .map((user, index) => ({ ...user, id: index + 1 }));
+
+        let shiftRequests = [];
+        let currentRole = 'user';
+        // Paste the deployed Google Apps Script Web App URL here to save requests to the target Google Sheet.
+        const GOOGLE_SHEET_LOG_URL = 'https://script.google.com/macros/s/AKfycbzjYzeeg9oD8O5X-8Kpbwcfbxjf51O5k_wVTlWGG1Ed_E-_6mv9a2e-GmQhMVAhVzpP/exec';
+        let currentDate = new Date(2026, 6, 1);
+        const requestToday = new Date(2026, 6, 6);
+        let pendingReserveData = null;
+        let pendingPromoteData = null;
+
+        const levelColors = {
+            'Level 1': { bg: 'bg-sky-50 text-sky-700 border-sky-200', dot: 'bg-sky-500' },
+            'Level 2': { bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
+            'Level 3': { bg: 'bg-indigo-50 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500' },
+            'Level 4': { bg: 'bg-purple-50 text-purple-700 border-purple-200', dot: 'bg-purple-500' },
+            'Level 5': { bg: 'bg-rose-50 text-rose-700 border-rose-200', dot: 'bg-rose-500' }
+        };
+        const departments = [...new Set(users.map((user) => user.department))];
+        const positions = [...new Set(users.map((user) => user.position))];
+        const levels = [...new Set(users.map((user) => user.level))];
+        const departmentShortNames = {
+            'อุบัติเหตุและฉุกเฉิน': 'ER',
+            'รับ-ส่งต่อ': 'Refer'
+        };
+        const leaveTypes = ['Vac', 'Off', 'ลากิจ', 'อบรม', 'ลาป่วย', 'ลาคลอด', 'ลาบวช'];
+        const longLeaveTypes = ['ลาคลอด', 'ลาป่วย', 'ลาบวช'];
+        const publicHolidays = {
+            '2026-10-13': 'วันคล้ายวันสวรรคต ร.9',
+            '2026-10-23': 'วันปิยมหาราช',
+            '2026-12-05': 'วันพ่อแห่งชาติ',
+            '2026-12-07': 'วันหยุดชดเชยวันพ่อแห่งชาติ',
+            '2026-12-10': 'วันรัฐธรรมนูญ',
+            '2026-12-31': 'วันสิ้นปี',
+            '2027-01-01': 'วันขึ้นปีใหม่'
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initInputs();
+            renderLeaveTypeDropdown();
+            renderPositionDropdowns();
+            renderUserDropdowns();
+            renderAdminTable();
+            renderAdminSettings();
+            renderAdminReserveQueue();
+            renderLevelLegend();
+            renderCalendar();
+            setupEventListeners();
+        });
+
+        function formatDateInput(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function formatDisplayDate(dateStrOrDate) {
+            const date = dateStrOrDate instanceof Date ? dateStrOrDate : new Date(`${dateStrOrDate}T00:00:00`);
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${day}/${monthNames[date.getMonth()]}/${date.getFullYear()}`;
+        }
+
+        function addMonths(date, months) {
+            return new Date(date.getFullYear(), date.getMonth() + months, date.getDate());
+        }
+
+        function formatThaiDate(date) {
+            return formatDisplayDate(date);
+        }
+
+        function getRequestDeadline(dateStr) {
+            const requestedDate = new Date(`${dateStr}T00:00:00`);
+            return new Date(requestedDate.getFullYear(), requestedDate.getMonth() - 2, 25);
+        }
+
+        function getFirstAllowedUserDate() {
+            let candidate = new Date(requestToday.getFullYear(), requestToday.getMonth(), requestToday.getDate());
+            while (requestToday > getRequestDeadline(formatDateInput(candidate))) {
+                candidate = new Date(candidate.getFullYear(), candidate.getMonth() + 1, 1);
+            }
+            return candidate;
+        }
+
+        function showFirstAllowedUserMonth() {
+            const firstAllowedDate = getFirstAllowedUserDate();
+            currentDate = new Date(firstAllowedDate.getFullYear(), firstAllowedDate.getMonth(), 1);
+        }
+
+        function applyDateLimits() {
+            const startInput = document.getElementById('form-start-date');
+            const endInput = document.getElementById('form-end-date');
+            if (currentRole === 'admin') {
+                startInput.removeAttribute('min');
+                startInput.removeAttribute('max');
+                endInput.removeAttribute('max');
+                endInput.min = startInput.value || '';
+                return;
+            }
+
+            const minDate = formatDateInput(getFirstAllowedUserDate());
+            const maxDate = formatDateInput(addMonths(requestToday, 6));
+            startInput.min = minDate;
+            startInput.max = maxDate;
+            endInput.min = startInput.value || minDate;
+            endInput.max = maxDate;
+        }
+
+        function initInputs() {
+            showFirstAllowedUserMonth();
+            applyDateLimits();
+        }
+
+        function setRole(nextRole) {
+            currentRole = nextRole;
+            document.getElementById('current-role-text').innerText = currentRole === 'admin' ? 'ผู้ดูแลระบบ (Admin)' : 'พนักงานทั่วไป (User)';
+            document.getElementById('btn-toggle-role').className = currentRole === 'admin'
+                ? 'bg-red-500 hover:bg-red-600 text-white font-medium px-4 py-1.5 rounded-lg text-sm shadow transition'
+                : 'bg-amber-500 hover:bg-amber-600 text-white font-medium px-4 py-1.5 rounded-lg text-sm shadow transition';
+            document.getElementById('btn-toggle-role').innerHTML = currentRole === 'admin'
+                ? '<i class="fa-solid fa-user-shield mr-1"></i> สลับเป็น User'
+                : '<i class="fa-solid fa-user-gear mr-1"></i> สลับเป็น Admin';
+
+            document.getElementById('admin-section').classList.toggle('hidden', currentRole !== 'admin');
+            if (currentRole !== 'admin') {
+                showCalendarView();
+            }
+            applyDateLimits();
+            if (currentRole === 'user') {
+                showFirstAllowedUserMonth();
+            }
+            renderCalendar();
+            renderAdminReserveQueue();
+        }
+
+        function showCalendarView() {
+            document.getElementById('calendar-view').classList.remove('hidden');
+            document.getElementById('calendar-view').classList.add('flex');
+            document.getElementById('admin-management-view').classList.add('hidden');
+        }
+
+        function showAdminManagementView() {
+            document.getElementById('calendar-view').classList.add('hidden');
+            document.getElementById('calendar-view').classList.remove('flex');
+            document.getElementById('admin-management-view').classList.remove('hidden');
+            renderAdminSettings();
+            renderAdminTable();
+        }
+
+        function setupEventListeners() {
+            document.getElementById('btn-toggle-role').addEventListener('click', async () => {
+                if (currentRole === 'user') {
+                    const password = prompt('กรุณาใส่รหัส Admin');
+                    if (!password) return;
+                    const isValidAdmin = await verifyAdminPassword(password);
+                    if (!isValidAdmin) {
+                        alert('รหัส Admin ไม่ถูกต้อง');
+                        return;
+                    }
+                    setRole('admin');
+                } else {
+                    setRole('user');
+                }
+            });
+
+            document.getElementById('btn-prev-month').addEventListener('click', () => {
+                currentDate.setMonth(currentDate.getMonth() - 1);
+                renderCalendar();
+            });
+
+            document.getElementById('btn-next-month').addEventListener('click', () => {
+                currentDate.setMonth(currentDate.getMonth() + 1);
+                renderCalendar();
+            });
+
+            document.getElementById('shift-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                handleShiftRequest();
+            });
+            document.getElementById('form-department-select').addEventListener('change', () => {
+                renderPositionDropdowns();
+                renderUserDropdowns();
+                renderCalendar();
+            });
+            document.getElementById('form-position-select').addEventListener('change', renderUserDropdowns);
+            document.getElementById('btn-admin-settings').addEventListener('click', () => {
+                showAdminManagementView();
+            });
+            document.getElementById('btn-back-calendar').addEventListener('click', () => {
+                showCalendarView();
+            });
+            document.getElementById('btn-show-add-panel').addEventListener('click', () => {
+                document.getElementById('admin-add-panel').classList.remove('hidden');
+                renderAdminAddPanel();
+            });
+            document.getElementById('admin-add-type').addEventListener('change', renderAdminAddPanel);
+            document.getElementById('form-start-date').addEventListener('change', () => {
+                const startDate = document.getElementById('form-start-date').value;
+                const endDateInput = document.getElementById('form-end-date');
+                applyDateLimits();
+                if (endDateInput.value && startDate && endDateInput.value < startDate) {
+                    endDateInput.value = startDate;
+                }
+            });
+
+            document.getElementById('btn-reserve-cancel').addEventListener('click', () => {
+                document.getElementById('reserve-modal').classList.add('hidden');
+                pendingReserveData = null;
+            });
+            document.getElementById('btn-reserve-confirm').addEventListener('click', saveReserveShift);
+            document.getElementById('btn-promote-skip').addEventListener('click', () => {
+                document.getElementById('promote-modal').classList.add('hidden');
+                pendingPromoteData = null;
+            });
+            document.getElementById('btn-promote-confirm').addEventListener('click', executePromote);
+            document.getElementById('btn-day-detail-close').addEventListener('click', () => {
+                document.getElementById('day-detail-modal').classList.add('hidden');
+            });
+        }
+
+        function findUserById(userId) {
+            return users.find((user) => user.id === userId);
+        }
+
+        function logAction(action, detail = {}) {
+            const payload = {
+                timestamp: new Date().toISOString(),
+                role: currentRole,
+                action,
+                detail
+            };
+
+            if (!GOOGLE_SHEET_LOG_URL) {
+                console.log('[log]', payload);
+                return;
+            }
+
+            fetch(GOOGLE_SHEET_LOG_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            }).catch((error) => {
+                console.warn('Cannot write log to Google Sheet', error);
+            });
+        }
+
+        function verifyAdminPassword(password) {
+            if (!GOOGLE_SHEET_LOG_URL) {
+                alert('ยังไม่ได้ตั้งค่า Google Apps Script Web App URL');
+                return Promise.resolve(false);
+            }
+
+            return new Promise((resolve) => {
+                const callbackName = `adminVerify_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+                const script = document.createElement('script');
+                const timeoutId = setTimeout(() => {
+                    cleanup();
+                    resolve(false);
+                }, 10000);
+
+                function cleanup() {
+                    clearTimeout(timeoutId);
+                    delete window[callbackName];
+                    script.remove();
+                }
+
+                window[callbackName] = (response) => {
+                    cleanup();
+                    resolve(Boolean(response && response.ok));
+                };
+
+                const url = new URL(GOOGLE_SHEET_LOG_URL);
+                url.searchParams.set('action', 'verifyAdmin');
+                url.searchParams.set('password', password);
+                url.searchParams.set('callback', callbackName);
+                script.onerror = () => {
+                    cleanup();
+                    resolve(false);
+                };
+                script.src = url.toString();
+                document.body.appendChild(script);
+            });
+        }
+
+        function getRequestLogDetail(request) {
+            const user = findUserById(request.userId);
+            return {
+                requestId: request.id,
+                name: user ? user.name : '',
+                department: request.department,
+                position: request.position,
+                level: request.level,
+                leaveType: request.leaveType,
+                trainingNote: request.trainingNote || '',
+                startDate: request.startDate || request.date,
+                endDate: request.endDate || request.date,
+                dateText: getRequestDateText(request),
+                status: request.status
+            };
+        }
+
+        function getDateRange(startDate, endDate) {
+            const dates = [];
+            const current = new Date(`${startDate}T00:00:00`);
+            const end = new Date(`${endDate}T00:00:00`);
+            while (current <= end) {
+                dates.push(formatDateInput(current));
+                current.setDate(current.getDate() + 1);
+            }
+            return dates;
+        }
+
+        function isWeekend(dateStr) {
+            const day = new Date(`${dateStr}T00:00:00`).getDay();
+            return day === 0 || day === 6;
+        }
+
+        function getTrainingBlockedDate(dates) {
+            return dates.find((date) => isWeekend(date) || publicHolidays[date]);
+        }
+
+        function getBlockedDateReason(dateStr) {
+            if (publicHolidays[dateStr]) return publicHolidays[dateStr];
+            return isWeekend(dateStr) ? 'วันเสาร์-อาทิตย์' : '';
+        }
+
+        function isCalendarHoliday(dateStr) {
+            return isWeekend(dateStr) || Boolean(publicHolidays[dateStr]);
+        }
+
+        function getRequestDates(request) {
+            return request.dates || [request.date];
+        }
+
+        function getRequestDateText(request) {
+            const startDate = request.startDate || request.date;
+            const endDate = request.endDate || request.date;
+            return startDate === endDate ? formatDisplayDate(startDate) : `${formatDisplayDate(startDate)} - ${formatDisplayDate(endDate)}`;
+        }
+
+        function getDateDiffDays(startDate, endDate) {
+            const start = new Date(`${startDate}T00:00:00`);
+            const end = new Date(`${endDate}T00:00:00`);
+            return Math.round((end - start) / 86400000);
+        }
+
+        function getMaxConsecutiveRequestDays(userId, additionalDates, excludedRequestId = null) {
+            const allDates = [
+                ...shiftRequests
+                    .filter((request) => request.userId === userId && request.id !== excludedRequestId)
+                    .flatMap((request) => getRequestDates(request)),
+                ...additionalDates
+            ];
+            const uniqueDates = [...new Set(allDates)].sort();
+            if (!uniqueDates.length) return 0;
+
+            let maxStreak = 1;
+            let currentStreak = 1;
+            for (let i = 1; i < uniqueDates.length; i += 1) {
+                const previousDate = uniqueDates[i - 1];
+                const currentDateValue = uniqueDates[i];
+                if (getDateDiffDays(previousDate, currentDateValue) === 1) {
+                    currentStreak += 1;
+                } else {
+                    currentStreak = 1;
+                }
+                maxStreak = Math.max(maxStreak, currentStreak);
+            }
+            return maxStreak;
+        }
+
+        function isMultiDayRequest(request) {
+            return getRequestDates(request).length > 1;
+        }
+
+        function showCalendarMonth(dateStr) {
+            const date = new Date(`${dateStr}T00:00:00`);
+            currentDate = new Date(date.getFullYear(), date.getMonth(), 1);
+        }
+
+        function getRequestTooltip(request) {
+            const user = findUserById(request.userId);
+            const trainingText = request.trainingNote ? ` | หมายเหตุ: ${request.trainingNote}` : '';
+            return `${user ? user.name : 'ผู้ใช้'} | ${request.department} | ${request.position} | ${request.level} | ${request.leaveType || '-'}${trainingText} | ${getRequestDateText(request)} | ${request.status === 'Pending' ? 'ตัวสำรอง' : 'อนุมัติ'}`;
+        }
+
+        function openDayDetail(dateStr, requests) {
+            const modal = document.getElementById('day-detail-modal');
+            document.getElementById('day-detail-title').innerText = `รายการขอเวร ${formatDisplayDate(dateStr)}`;
+            const list = document.getElementById('day-detail-list');
+            if (!requests.length) {
+                list.innerHTML = '<div class="rounded-lg border border-dashed border-gray-200 p-3 text-sm text-gray-500">ไม่มีรายการขอเวร</div>';
+            } else {
+                list.innerHTML = requests.map((request) => {
+                    const user = findUserById(request.userId);
+                    const colorStyle = levelColors[request.level] || { bg: 'bg-gray-100 text-gray-700 border-gray-200', dot: 'bg-gray-400' };
+                    const adminActions = currentRole === 'admin'
+                        ? `
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <button onclick="editShiftDates(${request.id})" class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">แก้ไขวัน</button>
+                                <button onclick="deleteShift(${request.id})" class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700">ยกเลิก</button>
+                            </div>
+                        `
+                        : '';
+                    const trainingText = request.trainingNote ? `<div class="text-xs opacity-80">หมายเหตุ: ${request.trainingNote}</div>` : '';
+                    return `
+                        <div class="rounded-lg border p-3 ${colorStyle.bg}">
+                            <div class="font-bold">${request.status === 'Pending' ? '[รอ] ' : ''}${user ? user.name : 'ผู้ใช้'}</div>
+                            <div class="text-xs opacity-80">${request.leaveType || '-'} • ${request.level} • ${request.position} • ${request.department}</div>
+                            <div class="text-xs opacity-80">${getRequestDateText(request)}</div>
+                            ${trainingText}
+                            ${adminActions}
+                        </div>
+                    `;
+                }).join('');
+            }
+            modal.classList.remove('hidden');
+        }
+
+        function getQuotaLimit(level) {
+            return level === 'Level 5' ? 3 : 2;
+        }
+
+        function canRequestMoreThanNineDays(leaveType) {
+            return longLeaveTypes.includes(leaveType);
+        }
+
+        function getApprovedCount(dateStr, department, position, level) {
+            return shiftRequests.filter((request) => (
+                getRequestDates(request).includes(dateStr)
+                && request.department === department
+                && request.position === position
+                && request.level === level
+                && request.status === 'Approved'
+            )).length;
+        }
+
+        function handleShiftRequest() {
+            const userId = Number(document.getElementById('form-user-select').value);
+            const startDate = document.getElementById('form-start-date').value;
+            const endDate = document.getElementById('form-end-date').value;
+            const leaveType = document.getElementById('form-leave-type').value;
+            const user = findUserById(userId);
+
+            if (!user || !startDate || !endDate || !leaveType) return;
+            if (endDate < startDate) {
+                alert('วันสิ้นสุดต้องไม่มาก่อนวันเริ่มต้น');
+                return;
+            }
+
+            const requestedDates = getDateRange(startDate, endDate);
+            if (!canRequestMoreThanNineDays(leaveType) && (requestedDates.length > 9 || getMaxConsecutiveRequestDays(user.id, requestedDates) > 9)) {
+                alert('คุณขอเวรติดต่อกันเกิน 9 วัน');
+                return;
+            }
+
+            let trainingNote = '';
+            if (leaveType === 'อบรม' || leaveType === 'ลากิจ') {
+                const blockedDate = getTrainingBlockedDate(requestedDates);
+                if (leaveType === 'อบรม' && blockedDate) {
+                    alert(`ไม่สามารถขอเวรอบรมวันที่ ${formatDisplayDate(blockedDate)} ได้ เนื่องจากเป็น${getBlockedDateReason(blockedDate)}`);
+                    return;
+                }
+
+                trainingNote = prompt(leaveType === 'อบรม' ? 'อบรมอะไร' : 'ระบุหมายเหตุลากิจ');
+                if (!trainingNote || !trainingNote.trim()) {
+                    alert(leaveType === 'อบรม' ? 'กรุณาระบุหมายเหตุว่าอบรมอะไร' : 'กรุณาระบุหมายเหตุลากิจ');
+                    return;
+                }
+                trainingNote = trainingNote.trim();
+            }
+            if (leaveType === 'Vac') {
+                const blockedDate = getTrainingBlockedDate(requestedDates);
+                if (blockedDate) {
+                    alert(`ไม่สามารถขอ Vac วันที่ ${formatDisplayDate(blockedDate)} ได้ เนื่องจากเป็น${getBlockedDateReason(blockedDate)}`);
+                    return;
+                }
+            }
+
+            if (currentRole !== 'admin') {
+                const maxRequestDate = addMonths(requestToday, 6);
+                const overLimitDate = requestedDates.find((date) => new Date(`${date}T00:00:00`) > maxRequestDate);
+                if (overLimitDate) {
+                    alert(`ขอเวรได้ไม่เกิน 6 เดือนล่วงหน้า (วันสุดท้ายที่ขอได้คือ ${formatThaiDate(maxRequestDate)})`);
+                    return;
+                }
+
+                const missedDeadlineDate = requestedDates.find((date) => requestToday > getRequestDeadline(date));
+                if (missedDeadlineDate) {
+                    const deadline = getRequestDeadline(missedDeadlineDate);
+                    alert(`ไม่สามารถขอเวรวันที่ ${formatDisplayDate(missedDeadlineDate)} ได้ เพราะต้องขอภายในวันที่ ${formatThaiDate(deadline)}`);
+                    return;
+                }
+            }
+
+            const duplicate = shiftRequests.some((request) => (
+                request.userId === user.id
+                && getRequestDates(request).some((date) => requestedDates.includes(date))
+            ));
+            if (duplicate) {
+                alert('คุณได้ยื่นคำขอเวรในช่วงวันที่เลือกไว้แล้ว');
+                return;
+            }
+
+            const quotaLimit = getQuotaLimit(user.level);
+            const isQuotaAvailable = requestedDates.every((date) => getApprovedCount(date, user.department, user.position, user.level) < quotaLimit);
+            if (isQuotaAvailable) {
+                const newRequest = {
+                    id: Date.now(),
+                    userId: user.id,
+                    startDate,
+                    endDate,
+                    dates: requestedDates,
+                    department: user.department,
+                    position: user.position,
+                    level: user.level,
+                    leaveType,
+                    trainingNote,
+                    status: 'Approved',
+                    timestamp: new Date()
+                };
+                shiftRequests.push(newRequest);
+                logAction('CREATE_APPROVED_REQUEST', getRequestLogDetail(newRequest));
+                alert('ยื่นคำขอเวรสำเร็จ (ได้รับโควตาแบบปกติ)');
+            } else {
+                pendingReserveData = {
+                    userId: user.id,
+                    startDate,
+                    endDate,
+                    dates: requestedDates,
+                    department: user.department,
+                    position: user.position,
+                    level: user.level,
+                    leaveType,
+                    trainingNote
+                };
+                document.getElementById('reserve-modal').classList.remove('hidden');
+            }
+
+            showCalendarMonth(startDate);
+            renderCalendar();
+            renderAdminReserveQueue();
+        }
+
+        function saveReserveShift() {
+            if (!pendingReserveData) return;
+            const newRequest = {
+                id: Date.now(),
+                userId: pendingReserveData.userId,
+                startDate: pendingReserveData.startDate,
+                endDate: pendingReserveData.endDate,
+                dates: pendingReserveData.dates,
+                department: pendingReserveData.department,
+                position: pendingReserveData.position,
+                level: pendingReserveData.level,
+                leaveType: pendingReserveData.leaveType,
+                trainingNote: pendingReserveData.trainingNote,
+                status: 'Pending',
+                timestamp: new Date()
+            };
+            shiftRequests.push(newRequest);
+            logAction('CREATE_PENDING_REQUEST', getRequestLogDetail(newRequest));
+            document.getElementById('reserve-modal').classList.add('hidden');
+            pendingReserveData = null;
+            alert('บันทึกเป็นตัวสำรองเรียบร้อยแล้ว');
+            showCalendarMonth(shiftRequests[shiftRequests.length - 1].startDate);
+            renderCalendar();
+            renderAdminReserveQueue();
+        }
+
+        function approveReserveRequest(requestId) {
+            const target = shiftRequests.find((request) => request.id === requestId);
+            if (!target) return;
+            const quotaLimit = getQuotaLimit(target.level);
+            const canApproveAllDates = getRequestDates(target).every((date) => getApprovedCount(date, target.department, target.position, target.level) < quotaLimit);
+            if (!canApproveAllDates) {
+                alert('ยังอนุมัติไม่ได้ เพราะโควตาของหน่วยงาน ตำแหน่ง และ Level นี้เต็มอยู่');
+                return;
+            }
+            target.status = 'Approved';
+            logAction('APPROVE_PENDING_REQUEST', getRequestLogDetail(target));
+            alert('อนุมัติตัวสำรองเรียบร้อยแล้ว');
+            renderCalendar();
+            renderAdminReserveQueue();
+        }
+
+        function cancelShiftAndCheckQueue(requestId) {
+            if (currentRole !== 'admin') {
+                alert('ผู้ใช้ทั่วไปไม่มีสิทธิ์ยกเลิกเวร กรุณาติดต่อแอดมิน');
+                return;
+            }
+
+            const targetIndex = shiftRequests.findIndex((request) => request.id === requestId);
+            if (targetIndex === -1) return;
+
+            const targetShift = shiftRequests[targetIndex];
+            if (!confirm(`ยืนยันลบคำขอเวรวันที่ ${getRequestDateText(targetShift)} หรือไม่?`)) return;
+            logAction('DELETE_REQUEST', getRequestLogDetail(targetShift));
+            shiftRequests.splice(targetIndex, 1);
+
+            if (targetShift.status === 'Approved') {
+                const reserves = shiftRequests
+                    .filter((request) => (
+                        request.level === targetShift.level
+                        && request.position === targetShift.position
+                        && request.status === 'Pending'
+                        && getRequestDates(request).some((date) => getRequestDates(targetShift).includes(date))
+                    ))
+                    .filter((request) => request.department === targetShift.department)
+                    .sort((a, b) => a.timestamp - b.timestamp);
+
+                if (reserves.length > 0) {
+                    const nextReserve = reserves[0];
+                    const nextUser = findUserById(nextReserve.userId);
+                    pendingPromoteData = nextReserve;
+                    document.getElementById('promote-modal-text').innerHTML = `โควตาวันที่ <strong>${getRequestDateText(targetShift)}</strong> หน่วยงาน <strong>${targetShift.department}</strong> ตำแหน่ง <strong>${targetShift.position}</strong> กลุ่ม <strong>${targetShift.level}</strong> ว่างลงแล้ว! ตรวจพบตัวสำรองคิวแรกคือ <strong>${nextUser ? nextUser.name : 'ผู้ใช้'}</strong> คุณต้องการเลื่อนสิทธิ์ให้เป็นตัวจริงทันทีหรือไม่?`;
+                    document.getElementById('promote-modal').classList.remove('hidden');
+                } else {
+                    alert('ลบรายการสำเร็จแล้ว (ไม่มีตัวสำรองในคิว)');
+                }
+            } else {
+                alert('ลบคิวสำรองออกเรียบร้อยแล้ว');
+            }
+
+            renderCalendar();
+            renderAdminReserveQueue();
+        }
+
+        function executePromote() {
+            if (!pendingPromoteData) return;
+            const target = shiftRequests.find((request) => request.id === pendingPromoteData.id);
+            if (target) {
+                const quotaLimit = getQuotaLimit(target.level);
+                const canPromoteAllDates = getRequestDates(target).every((date) => getApprovedCount(date, target.department, target.position, target.level) < quotaLimit);
+                if (!canPromoteAllDates) {
+                    alert('ยังเลื่อนสิทธิ์ไม่ได้ เพราะบางวันในช่วงที่ขอโควตาเต็มอยู่');
+                    document.getElementById('promote-modal').classList.add('hidden');
+                    pendingPromoteData = null;
+                    renderCalendar();
+                    renderAdminReserveQueue();
+                    return;
+                }
+                target.status = 'Approved';
+                logAction('PROMOTE_PENDING_REQUEST', getRequestLogDetail(target));
+                alert('เลื่อนสิทธิ์ตัวสำรองให้เป็นตัวจริงเรียบร้อยแล้ว');
+            }
+            document.getElementById('promote-modal').classList.add('hidden');
+            pendingPromoteData = null;
+            renderCalendar();
+            renderAdminReserveQueue();
+        }
+
+        window.changeUserName = function(userId, newName) {
+            const user = findUserById(userId);
+            if (user) {
+                const oldName = user.name;
+                user.name = newName;
+                refreshAdminViews();
+            }
+        };
+
+        window.changeUserLevel = function(userId, newLevel) {
+            const user = findUserById(userId);
+            if (user) {
+                const oldLevel = user.level;
+                user.level = newLevel;
+                shiftRequests.forEach((request) => {
+                    if (request.userId === userId) request.level = newLevel;
+                });
+                if (!levels.includes(newLevel)) levels.push(newLevel);
+                refreshAdminViews();
+            }
+        };
+
+        window.changeUserPosition = function(userId, newPosition) {
+            const user = findUserById(userId);
+            if (user) {
+                const oldPosition = user.position;
+                user.position = newPosition;
+                shiftRequests.forEach((request) => {
+                    if (request.userId === userId) request.position = newPosition;
+                });
+                if (!positions.includes(newPosition)) positions.push(newPosition);
+                refreshAdminViews();
+            }
+        };
+
+        window.changeUserDepartment = function(userId, newDepartment) {
+            const user = findUserById(userId);
+            if (user) {
+                const oldDepartment = user.department;
+                user.department = newDepartment;
+                shiftRequests.forEach((request) => {
+                    if (request.userId === userId) request.department = newDepartment;
+                });
+                if (!departments.includes(newDepartment)) departments.push(newDepartment);
+                refreshAdminViews();
+            }
+        };
+
+        function refreshAdminViews() {
+            renderPositionDropdowns();
+            renderUserDropdowns();
+            renderAdminTable();
+            renderAdminSettings();
+            renderLevelLegend();
+            renderCalendar();
+            renderAdminReserveQueue();
+        }
+
+        window.addAdminUser = function() {
+            const nameInput = document.getElementById('admin-add-user-name');
+            const name = nameInput.value.trim();
+            const department = document.getElementById('admin-add-user-department').value;
+            const position = document.getElementById('admin-add-user-position').value;
+            const level = document.getElementById('admin-add-user-level').value;
+            if (!name || !department || !position || !level) {
+                alert('กรุณากรอกข้อมูลเจ้าหน้าที่ให้ครบ');
+                return;
+            }
+
+            users.push({
+                id: Math.max(0, ...users.map((user) => user.id)) + 1,
+                name,
+                department,
+                position,
+                level
+            });
+            nameInput.value = '';
+            refreshAdminViews();
+        };
+
+        window.deleteUser = function(userId) {
+            const user = findUserById(userId);
+            if (!user) return;
+            if (!confirm(`ยืนยันลบรายชื่อ ${user.name} หรือไม่?`)) return;
+            users = users.filter((item) => item.id !== userId);
+            shiftRequests = shiftRequests.filter((request) => request.userId !== userId);
+            refreshAdminViews();
+        };
+
+        function escapeInlineValue(value) {
+            return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        }
+
+        window.addDepartment = function() {
+            const input = document.getElementById('admin-add-department');
+            const department = input.value.trim();
+            if (!department) return;
+            if (departments.includes(department)) {
+                alert('มีหน่วยงานนี้อยู่แล้ว');
+                return;
+            }
+            departments.push(department);
+            input.value = '';
+            refreshAdminViews();
+        };
+
+        window.deleteDepartment = function(department) {
+            if (!confirm(`ยืนยันลบหน่วยงาน ${department} หรือไม่? รายชื่อและคำขอเวรของหน่วยงานนี้จะถูกลบด้วย`)) return;
+            const deletedUserIds = users.filter((user) => user.department === department).map((user) => user.id);
+            users = users.filter((user) => user.department !== department);
+            shiftRequests = shiftRequests.filter((request) => !deletedUserIds.includes(request.userId));
+            const index = departments.indexOf(department);
+            if (index >= 0) departments.splice(index, 1);
+            refreshAdminViews();
+        };
+
+        window.changeDepartmentName = function(oldDepartment, newDepartment) {
+            const nextDepartment = newDepartment.trim();
+            if (!nextDepartment || nextDepartment === oldDepartment) return;
+            if (departments.includes(nextDepartment)) {
+                alert('มีหน่วยงานนี้อยู่แล้ว');
+                refreshAdminViews();
+                return;
+            }
+            const index = departments.indexOf(oldDepartment);
+            if (index >= 0) departments[index] = nextDepartment;
+            users.forEach((user) => {
+                if (user.department === oldDepartment) user.department = nextDepartment;
+            });
+            shiftRequests.forEach((request) => {
+                if (request.department === oldDepartment) request.department = nextDepartment;
+            });
+            refreshAdminViews();
+        };
+
+        window.addPosition = function() {
+            const input = document.getElementById('admin-add-position');
+            const position = input.value.trim();
+            if (!position) return;
+            if (positions.includes(position)) {
+                alert('มีตำแหน่งนี้อยู่แล้ว');
+                return;
+            }
+            positions.push(position);
+            input.value = '';
+            refreshAdminViews();
+        };
+
+        window.deletePosition = function(position) {
+            if (!confirm(`ยืนยันลบตำแหน่ง ${position} หรือไม่? รายชื่อและคำขอเวรของตำแหน่งนี้จะถูกลบด้วย`)) return;
+            const deletedUserIds = users.filter((user) => user.position === position).map((user) => user.id);
+            users = users.filter((user) => user.position !== position);
+            shiftRequests = shiftRequests.filter((request) => !deletedUserIds.includes(request.userId));
+            const index = positions.indexOf(position);
+            if (index >= 0) positions.splice(index, 1);
+            refreshAdminViews();
+        };
+
+        window.changePositionName = function(oldPosition, newPosition) {
+            const nextPosition = newPosition.trim();
+            if (!nextPosition || nextPosition === oldPosition) return;
+            if (positions.includes(nextPosition)) {
+                alert('มีตำแหน่งนี้อยู่แล้ว');
+                refreshAdminViews();
+                return;
+            }
+            const index = positions.indexOf(oldPosition);
+            if (index >= 0) positions[index] = nextPosition;
+            users.forEach((user) => {
+                if (user.position === oldPosition) user.position = nextPosition;
+            });
+            shiftRequests.forEach((request) => {
+                if (request.position === oldPosition) request.position = nextPosition;
+            });
+            refreshAdminViews();
+        };
+
+        window.addLevel = function() {
+            const input = document.getElementById('admin-add-level');
+            const level = input.value.trim();
+            if (!level) return;
+            if (levels.includes(level)) {
+                alert('มี Level นี้อยู่แล้ว');
+                return;
+            }
+            levels.push(level);
+            input.value = '';
+            refreshAdminViews();
+        };
+
+        window.deleteLevel = function(level) {
+            if (!confirm(`ยืนยันลบ ${level} หรือไม่? รายชื่อและคำขอเวรของ Level นี้จะถูกลบด้วย`)) return;
+            const deletedUserIds = users.filter((user) => user.level === level).map((user) => user.id);
+            users = users.filter((user) => user.level !== level);
+            shiftRequests = shiftRequests.filter((request) => !deletedUserIds.includes(request.userId));
+            const index = levels.indexOf(level);
+            if (index >= 0) levels.splice(index, 1);
+            refreshAdminViews();
+        };
+
+        window.changeLevelName = function(oldLevel, newLevel) {
+            const nextLevel = newLevel.trim();
+            if (!nextLevel || nextLevel === oldLevel) return;
+            if (levels.includes(nextLevel)) {
+                alert('มี Level นี้อยู่แล้ว');
+                refreshAdminViews();
+                return;
+            }
+            const index = levels.indexOf(oldLevel);
+            if (index >= 0) levels[index] = nextLevel;
+            users.forEach((user) => {
+                if (user.level === oldLevel) user.level = nextLevel;
+            });
+            shiftRequests.forEach((request) => {
+                if (request.level === oldLevel) request.level = nextLevel;
+            });
+            refreshAdminViews();
+        };
+
+        window.deleteShift = function(requestId) {
+            cancelShiftAndCheckQueue(requestId);
+            if (!shiftRequests.some((request) => request.id === requestId)) {
+                document.getElementById('day-detail-modal').classList.add('hidden');
+            }
+        };
+
+        window.editShiftDates = function(requestId) {
+            if (currentRole !== 'admin') {
+                alert('เฉพาะแอดมินเท่านั้นที่แก้ไขวันขอเวรได้');
+                return;
+            }
+
+            const request = shiftRequests.find((item) => item.id === requestId);
+            if (!request) return;
+
+            const currentStartDate = request.startDate || request.date;
+            const currentEndDate = request.endDate || request.date;
+            const newStartDate = prompt('ระบุวันเริ่มต้นใหม่ (YYYY-MM-DD)', currentStartDate);
+            if (!newStartDate) return;
+
+            const newEndDate = prompt('ระบุวันสิ้นสุดใหม่ (YYYY-MM-DD)', currentEndDate);
+            if (!newEndDate) return;
+
+            if (newEndDate < newStartDate) {
+                alert('วันสิ้นสุดต้องไม่มาก่อนวันเริ่มต้น');
+                return;
+            }
+
+            const newDates = getDateRange(newStartDate, newEndDate);
+            if (!canRequestMoreThanNineDays(request.leaveType) && (newDates.length > 9 || getMaxConsecutiveRequestDays(request.userId, newDates, request.id) > 9)) {
+                alert('คุณขอเวรติดต่อกันเกิน 9 วัน');
+                return;
+            }
+            if (request.leaveType === 'Vac') {
+                const blockedDate = getTrainingBlockedDate(newDates);
+                if (blockedDate) {
+                    alert(`ไม่สามารถขอ Vac วันที่ ${formatDisplayDate(blockedDate)} ได้ เนื่องจากเป็น${getBlockedDateReason(blockedDate)}`);
+                    return;
+                }
+            }
+            request.startDate = newStartDate;
+            request.endDate = newEndDate;
+            request.dates = newDates;
+            delete request.date;
+            logAction('EDIT_REQUEST_DATES', getRequestLogDetail(request));
+            showCalendarMonth(newStartDate);
+            renderCalendar();
+            renderAdminReserveQueue();
+            document.getElementById('day-detail-modal').classList.add('hidden');
+            alert('แก้ไขวันขอเวรเรียบร้อยแล้ว');
+        };
+
+        function renderCalendar() {
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+
+            const monthNames = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+            document.getElementById('calendar-month-year').innerText = `${monthNames[month]} ${year + 543}`;
+
+            const firstDayIndex = new Date(year, month, 1).getDay();
+            const totalDays = new Date(year, month + 1, 0).getDate();
+
+            const calendarDaysContainer = document.getElementById('calendar-days');
+            calendarDaysContainer.className = 'space-y-2 flex-grow';
+            calendarDaysContainer.innerHTML = '';
+
+            const selectedCalendarDepartment = document.getElementById('form-department-select').value || departments[0];
+            const slots = [];
+            for (let i = 0; i < firstDayIndex; i += 1) {
+                slots.push(null);
+            }
+            for (let day = 1; day <= totalDays; day += 1) {
+                const currentMonthStr = String(month + 1).padStart(2, '0');
+                const currentDayStr = String(day).padStart(2, '0');
+                slots.push({
+                    day,
+                    date: `${year}-${currentMonthStr}-${currentDayStr}`
+                });
+            }
+            while (slots.length % 7 !== 0) {
+                slots.push(null);
+            }
+
+            for (let weekStart = 0; weekStart < slots.length; weekStart += 7) {
+                const weekSlots = slots.slice(weekStart, weekStart + 7);
+                const weekBlock = document.createElement('div');
+                weekBlock.className = 'overflow-visible';
+
+                const weekGrid = document.createElement('div');
+                weekGrid.className = 'grid grid-cols-7 gap-2 overflow-visible';
+                const weekDates = weekSlots.map((slot) => slot ? slot.date : null);
+                const maxVisibleLanes = 3;
+                const laneHeightRem = 1.65;
+                const calendarGapRem = 0.5;
+                const dayHorizontalPaddingRem = 0.5;
+                const weekSegments = shiftRequests
+                    .filter((request) => request.department === selectedCalendarDepartment)
+                    .map((request) => {
+                        const requestDates = getRequestDates(request).filter((date) => weekDates.includes(date));
+                        if (!requestDates.length) return null;
+                        const startIndex = weekDates.indexOf(requestDates[0]);
+                        const endIndex = weekDates.indexOf(requestDates[requestDates.length - 1]);
+                        if (startIndex < 0 || endIndex < 0) return null;
+                        return { request, startIndex, endIndex, lane: 0 };
+                    })
+                    .filter(Boolean)
+                    .sort((a, b) => a.startIndex - b.startIndex || (b.endIndex - b.startIndex) - (a.endIndex - a.startIndex));
+                const laneUsage = [];
+                weekSegments.forEach((segment) => {
+                    let lane = 0;
+                    while (true) {
+                        if (!laneUsage[lane]) laneUsage[lane] = Array(7).fill(false);
+                        const hasConflict = laneUsage[lane]
+                            .slice(segment.startIndex, segment.endIndex + 1)
+                            .some(Boolean);
+                        if (!hasConflict) break;
+                        lane += 1;
+                    }
+                    segment.lane = lane;
+                    for (let index = segment.startIndex; index <= segment.endIndex; index += 1) {
+                        laneUsage[lane][index] = true;
+                    }
+                });
+
+                weekSlots.forEach((slot, dayIndex) => {
+                    if (!slot) {
+                        const blankDiv = document.createElement('div');
+                        blankDiv.className = 'bg-gray-50/50 border border-gray-100 rounded-xl min-h-[118px] overflow-hidden';
+                        weekGrid.appendChild(blankDiv);
+                        return;
+                    }
+
+                    const fullDateStr = slot.date;
+                    const dayDiv = document.createElement('div');
+                    const holidayClasses = isCalendarHoliday(fullDateStr)
+                        ? 'bg-yellow-50 border-yellow-200'
+                        : 'bg-white border-gray-100';
+                    dayDiv.className = `${holidayClasses} relative border rounded-xl p-2 min-h-[118px] flex flex-col hover:shadow-sm transition overflow-visible cursor-pointer`;
+                    if (publicHolidays[fullDateStr]) {
+                        dayDiv.title = publicHolidays[fullDateStr];
+                    } else if (isWeekend(fullDateStr)) {
+                        dayDiv.title = 'วันเสาร์-อาทิตย์';
+                    }
+
+                    const dayRequests = shiftRequests.filter((request) => (
+                        getRequestDates(request).includes(fullDateStr)
+                        && request.department === selectedCalendarDepartment
+                    ));
+                    const dayTooltip = dayRequests.map(getRequestTooltip).join('\n');
+                    if (dayTooltip) {
+                        dayDiv.title = dayDiv.title ? `${dayDiv.title}\n${dayTooltip}` : dayTooltip;
+                    }
+                    dayDiv.addEventListener('click', () => openDayDetail(fullDateStr, dayRequests));
+
+                    const dayHeader = document.createElement('div');
+                    dayHeader.className = isCalendarHoliday(fullDateStr)
+                        ? 'text-left text-xs font-bold text-yellow-700 mb-1'
+                        : 'text-left text-xs font-bold text-gray-400 mb-1';
+                    dayHeader.innerText = slot.day;
+                    dayDiv.appendChild(dayHeader);
+
+                    const listContainer = document.createElement('div');
+                    listContainer.className = 'relative flex-grow min-h-[6.8rem] overflow-visible';
+
+                    const startingSegments = weekSegments
+                        .filter((segment) => segment.startIndex === dayIndex && segment.lane < maxVisibleLanes);
+
+                    startingSegments.forEach((segment) => {
+                        const request = segment.request;
+                        const user = findUserById(request.userId);
+                        if (!user) return;
+
+                        const colorStyle = levelColors[request.level] || { bg: 'bg-gray-100 text-gray-700', dot: 'bg-gray-400' };
+                        const levelLabel = request.level.replace('Level ', 'L');
+                        const item = document.createElement('div');
+                        const isMultiDay = isMultiDayRequest(request);
+                        const span = Math.max(1, segment.endIndex - segment.startIndex + 1);
+                        const endEdgeExtraRem = (span - 1) * (calendarGapRem + dayHorizontalPaddingRem * 2) + dayHorizontalPaddingRem;
+                        item.style.top = `${segment.lane * laneHeightRem}rem`;
+                        item.style.width = `calc(${span * 100}% + ${endEdgeExtraRem}rem)`;
+                        item.className = `absolute left-0 z-20 h-6 text-[10px] leading-4 p-1 rounded-md border ${colorStyle.bg} transition-all truncate whitespace-nowrap shadow-sm`;
+                        item.title = getRequestTooltip(request);
+                        item.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full ${colorStyle.dot} mr-1"></span><span class="font-bold">${request.status === 'Pending' ? '[รอ] ' : ''}${user.name}</span> <span class="opacity-80">• ${request.leaveType || '-'} • ${levelLabel}${isMultiDay ? ` • ${getRequestDateText(request)}` : ''}</span>`;
+                        item.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                            openDayDetail(fullDateStr, dayRequests);
+                        });
+                        listContainer.appendChild(item);
+                    });
+
+                    const visibleRequestIds = new Set(
+                        weekSegments
+                            .filter((segment) => segment.startIndex <= dayIndex && segment.endIndex >= dayIndex && segment.lane < maxVisibleLanes)
+                            .map((segment) => segment.request.id)
+                    );
+                    const hiddenInlineCount = dayRequests.filter((request) => !visibleRequestIds.has(request.id)).length;
+                    if (hiddenInlineCount > 0) {
+                        const moreBtn = document.createElement('button');
+                        moreBtn.style.top = `${maxVisibleLanes * laneHeightRem}rem`;
+                        moreBtn.className = 'absolute left-0 z-30 w-full text-left text-[10px] font-semibold text-teal-700 hover:text-teal-900 px-1 py-0.5 rounded hover:bg-teal-50 truncate';
+                        moreBtn.innerText = `+${hiddenInlineCount} เพิ่มเติม`;
+                        moreBtn.title = dayRequests.map(getRequestTooltip).join('\n');
+                        moreBtn.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                            openDayDetail(fullDateStr, dayRequests);
+                        });
+                        listContainer.appendChild(moreBtn);
+                    }
+
+                    dayDiv.appendChild(listContainer);
+                    weekGrid.appendChild(dayDiv);
+                });
+
+                weekBlock.appendChild(weekGrid);
+                calendarDaysContainer.appendChild(weekBlock);
+            }
+        }
+
+        function renderLevelLegend() {
+            const legend = document.getElementById('level-legend');
+            legend.innerHTML = levels.map((level) => {
+                const colorStyle = levelColors[level] || { bg: 'bg-gray-100 text-gray-700 border-gray-200', dot: 'bg-gray-400' };
+                return `
+                    <span class="inline-flex items-center gap-1 rounded-md border px-2 py-1 ${colorStyle.bg}">
+                        <span class="h-2 w-2 rounded-full ${colorStyle.dot}"></span>
+                        ${level}
+                    </span>
+                `;
+            }).join('');
+        }
+
+        function renderLeaveTypeDropdown() {
+            const select = document.getElementById('form-leave-type');
+            select.innerHTML = leaveTypes.map((leaveType) => `<option value="${leaveType}">${leaveType}</option>`).join('');
+        }
+
+        function renderPositionDropdowns() {
+            const departmentSelect = document.getElementById('form-department-select');
+            const positionSelect = document.getElementById('form-position-select');
+            const currentDepartment = departmentSelect.value;
+            const currentPosition = positionSelect.value;
+
+            departmentSelect.innerHTML = departments.map((department) => `<option value="${department}">${department}</option>`).join('');
+            if (departments.includes(currentDepartment)) {
+                departmentSelect.value = currentDepartment;
+            }
+
+            positionSelect.innerHTML = positions.map((position) => `<option value="${position}">${position}</option>`).join('');
+            if (positions.includes(currentPosition)) {
+                positionSelect.value = currentPosition;
+            }
+        }
+
+        function renderUserDropdowns() {
+            const departmentSelect = document.getElementById('form-department-select');
+            const positionSelect = document.getElementById('form-position-select');
+            const select = document.getElementById('form-user-select');
+            const selectedDepartment = departmentSelect.value || departments[0];
+            const selectedPosition = positionSelect.value;
+            const filteredUsers = users.filter((user) => user.department === selectedDepartment && user.position === selectedPosition);
+            select.innerHTML = filteredUsers.length
+                ? filteredUsers.map((user) => `<option value="${user.id}">${user.name} (${user.level})</option>`).join('')
+                : '<option value="">ไม่มีเจ้าหน้าที่ในเงื่อนไขนี้</option>';
+        }
+
+        function renderAdminTable() {
+            const tbody = document.getElementById('admin-user-table');
+            tbody.innerHTML = users.map((user) => `
+                <tr class="hover:bg-gray-50 transition">
+                    <td class="p-3 font-medium text-gray-700">
+                        <input value="${user.name}" onchange="changeUserName(${user.id}, this.value)" class="w-full p-1.5 text-sm bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
+                    </td>
+                    <td class="p-3">
+                        <select onchange="changeUserDepartment(${user.id}, this.value)" class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
+                            ${departments.map((department) => `<option value="${department}" ${user.department === department ? 'selected' : ''}>${department}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td class="p-3">
+                        <select onchange="changeUserPosition(${user.id}, this.value)" class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
+                            ${positions.map((position) => `<option value="${position}" ${user.position === position ? 'selected' : ''}>${position}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td class="p-3">
+                        <select onchange="changeUserLevel(${user.id}, this.value)" class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
+                            ${levels.map((level) => `<option value="${level}" ${user.level === level ? 'selected' : ''}>${level}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td class="p-3">
+                        <button onclick="deleteUser(${user.id})" class="text-red-500 hover:text-red-700 text-xs font-semibold">ลบ</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function renderAdminSettings() {
+            const departmentSelect = document.getElementById('admin-add-user-department');
+            const positionSelect = document.getElementById('admin-add-user-position');
+            const levelSelect = document.getElementById('admin-add-user-level');
+            if (!departmentSelect || !positionSelect || !levelSelect) return;
+
+            departmentSelect.innerHTML = departments.map((department) => `<option value="${department}">${department}</option>`).join('');
+            positionSelect.innerHTML = positions.map((position) => `<option value="${position}">${position}</option>`).join('');
+            levelSelect.innerHTML = levels.map((level) => `<option value="${level}">${level}</option>`).join('');
+
+            renderAdminAddPanel();
+            renderAdminSelectedList();
+        }
+
+        function renderAdminAddPanel() {
+            const typeSelect = document.getElementById('admin-add-type');
+            if (!typeSelect) return;
+            const selectedType = typeSelect.value;
+            document.getElementById('admin-add-user-panel').classList.toggle('hidden', selectedType !== 'user');
+            document.getElementById('admin-add-department-panel').classList.toggle('hidden', selectedType !== 'department');
+            document.getElementById('admin-add-position-panel').classList.toggle('hidden', selectedType !== 'position');
+            document.getElementById('admin-add-level-panel').classList.toggle('hidden', selectedType !== 'level');
+            renderAdminSelectedList();
+        }
+
+        function renderAdminSelectedList() {
+            const typeSelect = document.getElementById('admin-add-type');
+            const title = document.getElementById('admin-selected-list-title');
+            const container = document.getElementById('admin-selected-list');
+            if (!typeSelect || !title || !container) return;
+
+            const selectedType = typeSelect.value;
+            if (selectedType === 'user') {
+                title.innerText = 'รายการเจ้าหน้าที่เดิม';
+                container.innerHTML = users.map((user) => `
+                    <div class="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1fr_0.8fr_auto] gap-2 rounded-lg bg-white p-2 text-xs">
+                        <input value="${user.name}" onchange="changeUserName(${user.id}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
+                        <select onchange="changeUserDepartment(${user.id}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
+                            ${departments.map((department) => `<option value="${department}" ${user.department === department ? 'selected' : ''}>${department}</option>`).join('')}
+                        </select>
+                        <select onchange="changeUserPosition(${user.id}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
+                            ${positions.map((position) => `<option value="${position}" ${user.position === position ? 'selected' : ''}>${position}</option>`).join('')}
+                        </select>
+                        <select onchange="changeUserLevel(${user.id}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
+                            ${levels.map((level) => `<option value="${level}" ${user.level === level ? 'selected' : ''}>${level}</option>`).join('')}
+                        </select>
+                        <button onclick="deleteUser(${user.id})" class="text-red-500 hover:text-red-700 font-semibold">ลบ</button>
+                    </div>
+                `).join('');
+                return;
+            }
+
+            if (selectedType === 'department') {
+                title.innerText = 'รายการหน่วยงานเดิม';
+                container.innerHTML = departments.map((department) => `
+                    <div class="flex items-center gap-2 rounded-lg bg-white p-2 text-xs">
+                        <input value="${department}" onchange="changeDepartmentName('${escapeInlineValue(department)}', this.value)" class="min-w-0 flex-1 p-1.5 border border-amber-100 rounded-md">
+                        <button onclick="deleteDepartment('${escapeInlineValue(department)}')" class="text-red-500 hover:text-red-700 font-semibold">ลบ</button>
+                    </div>
+                `).join('');
+                return;
+            }
+
+            if (selectedType === 'position') {
+                title.innerText = 'รายการตำแหน่งเดิม';
+                container.innerHTML = positions.map((position) => `
+                    <div class="flex items-center gap-2 rounded-lg bg-white p-2 text-xs">
+                        <input value="${position}" onchange="changePositionName('${escapeInlineValue(position)}', this.value)" class="min-w-0 flex-1 p-1.5 border border-amber-100 rounded-md">
+                        <button onclick="deletePosition('${escapeInlineValue(position)}')" class="text-red-500 hover:text-red-700 font-semibold">ลบ</button>
+                    </div>
+                `).join('');
+                return;
+            }
+
+            title.innerText = 'รายการ Level เดิม';
+            container.innerHTML = levels.map((level) => `
+                <div class="flex items-center gap-2 rounded-lg bg-white p-2 text-xs">
+                    <input value="${level}" onchange="changeLevelName('${escapeInlineValue(level)}', this.value)" class="min-w-0 flex-1 p-1.5 border border-amber-100 rounded-md">
+                    <button onclick="deleteLevel('${escapeInlineValue(level)}')" class="text-red-500 hover:text-red-700 font-semibold">ลบ</button>
+                </div>
+            `).join('');
+        }
+
+        function renderAdminReserveQueue() {
+            const container = document.getElementById('admin-reserve-queue');
+            const pending = shiftRequests
+                .filter((request) => request.status === 'Pending')
+                .sort((a, b) => a.timestamp - b.timestamp);
+
+            if (!pending.length) {
+                container.innerHTML = '<div class="rounded-xl border border-dashed border-gray-200 p-3 text-sm text-gray-500">ไม่มีคำขอที่เป็นตัวสำรองในระบบ</div>';
+                return;
+            }
+
+            container.innerHTML = pending.map((request) => {
+                const user = findUserById(request.userId);
+                const trainingText = request.trainingNote ? ` • หมายเหตุ: ${request.trainingNote}` : '';
+                return `
+                    <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <div class="font-semibold text-amber-800">${user ? user.name : 'ผู้ใช้'}</div>
+                                <div class="text-xs text-amber-700">วันที่ ${getRequestDateText(request)} • ${request.department} • ${request.position || (user ? user.position : '')} • ${request.leaveType || '-'}${trainingText} • Level ${request.level} • สถานะตัวสำรอง</div>
+                            </div>
+                            <button onclick="approveReserveRequest(${request.id})" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">อนุมัติ</button>
+                        </div>
+                        <div class="mt-3 flex flex-wrap justify-end gap-2">
+                            <button onclick="editShiftDates(${request.id})" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">แก้ไขวัน</button>
+                            <button onclick="deleteShift(${request.id})" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">ยกเลิก</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    </script>
+</body>
+</html>
