@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบขอเวรและจัดการคิวสำรอง</title>
+    <title>ระบบขอเวร งานเวชศาสตร์ฉุกเฉิน</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -11,7 +11,7 @@
 
     <nav class="bg-teal-600 text-white shadow-md p-3 md:p-4 sticky top-0 z-50">
         <div class="container mx-auto flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
-            <h1 class="text-lg md:text-xl font-bold leading-snug"><i class="fa-solid fa-calendar-days mr-2"></i>ระบบขอเวร / จองวันหยุด</h1>
+            <h1 class="text-lg md:text-xl font-bold leading-snug"><i class="fa-solid fa-calendar-days mr-2"></i>ระบบขอเวร งานเวชศาสตร์ฉุกเฉิน</h1>
             <div class="flex flex-wrap items-center gap-2 md:gap-4">
                 <span class="text-xs md:text-sm bg-teal-700 px-3 py-1.5 rounded-full">
                     สถานะปัจจุบัน: <strong id="current-role-text">พนักงานทั่วไป (User)</strong>
@@ -679,6 +679,8 @@
                     const user = findUserByRequestRecord(request);
                     const startDate = String(request.startDate || '').trim();
                     const endDate = String(request.endDate || startDate).trim();
+                    const status = String(request.status || 'Approved').trim();
+                    if (['cancel', 'cancle'].includes(status.toLowerCase())) return null;
                     if (!startDate || !endDate) return null;
                     return {
                         id: Number(request.id) || request.id,
@@ -692,7 +694,7 @@
                         level: request.level || (user ? user.level : ''),
                         leaveType: request.leaveType || '',
                         trainingNote: request.trainingNote || '',
-                        status: request.status || 'Approved',
+                        status,
                         timestamp: request.timestamp ? new Date(request.timestamp) : new Date(0)
                     };
                 })
@@ -1174,7 +1176,7 @@
 
             const targetShift = shiftRequests[targetIndex];
             if (!confirm(`ยืนยันลบคำขอเวรวันที่ ${getRequestDateText(targetShift)} หรือไม่?`)) return;
-            logAction('DELETE_REQUEST', getRequestLogDetail(targetShift));
+            logAction('DELETE_REQUEST', { ...getRequestLogDetail(targetShift), status: 'Cancel' });
             shiftRequests.splice(targetIndex, 1);
 
             if (targetShift.status === 'Approved') {
