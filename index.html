@@ -216,10 +216,14 @@
                 </button>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                 <label class="text-xs font-semibold text-gray-600">
                     ปีงบประมาณ
                     <select id="heatmap-fiscal-year" class="mt-1 w-full p-2 text-sm bg-white border border-teal-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500"></select>
+                </label>
+                <label class="text-xs font-semibold text-gray-600">
+                    หน่วยงาน
+                    <select id="heatmap-department" class="mt-1 w-full p-2 text-sm bg-white border border-teal-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500"></select>
                 </label>
                 <div class="rounded-lg border border-teal-100 bg-teal-50 p-3 text-xs text-teal-800">
                     นับตามจำนวนวันที่มีคำขอเวรในระบบ สีเข้มหมายถึงขอบ่อยกว่า
@@ -297,7 +301,6 @@
         </div>
     </div>
 
-
     <script>
         let users = [];
         let departments = [];
@@ -308,8 +311,9 @@
         let currentRole = 'user';
         // Paste the deployed Google Apps Script Web App URL here to save requests to the target Google Sheet.
         const GOOGLE_SHEET_LOG_URL = 'https://script.google.com/macros/s/AKfycbyETA6KgUmne2b3PLkPmsl2BrESLOfw1i9r4x5qjxqBkvJD5V3m3n79n94ufUWGGFn9/exec';
-        let currentDate = new Date(2026, 6, 1);
-        const requestToday = new Date(2026, 6, 6);
+        const requestToday = new Date();
+        requestToday.setHours(0, 0, 0, 0);
+        let currentDate = new Date(requestToday.getFullYear(), requestToday.getMonth(), 1);
         let pendingReserveData = null;
         let pendingPromoteData = null;
         let heatmapDetailCache = {};
@@ -516,6 +520,9 @@
                 showCalendarView();
             });
             document.getElementById('heatmap-fiscal-year').addEventListener('change', () => {
+                renderAdminHeatmap(false);
+            });
+            document.getElementById('heatmap-department').addEventListener('change', () => {
                 renderAdminHeatmap(false);
             });
             document.getElementById('btn-show-add-panel').addEventListener('click', () => {
@@ -1883,6 +1890,17 @@
             select.value = years.includes(Number(previousValue)) ? previousValue : String(years[0]);
         }
 
+        function renderHeatmapDepartmentOptions() {
+            const select = document.getElementById('heatmap-department');
+            if (!select) return;
+            const previousValue = select.value;
+            select.innerHTML = [
+                '<option value="">ทุกหน่วยงาน</option>',
+                ...departments.map((department) => `<option value="${department}">${department}</option>`)
+            ].join('');
+            select.value = departments.includes(previousValue) ? previousValue : '';
+        }
+
         function renderHeatmapMonthOptions() {
             const fiscalYear = Number(document.getElementById('heatmap-fiscal-year').value);
             const monthSelect = document.getElementById('heatmap-month');
@@ -1932,19 +1950,28 @@
         function renderAdminHeatmap(resetOptions = true) {
             if (resetOptions) {
                 renderHeatmapFiscalYearOptions();
+                renderHeatmapDepartmentOptions();
             }
             heatmapDetailCache = {};
 
             const fiscalYear = Number(document.getElementById('heatmap-fiscal-year').value);
+            const selectedDepartment = document.getElementById('heatmap-department').value;
             const fiscalMonths = getFiscalMonths(fiscalYear);
+            const filteredUsers = selectedDepartment
+                ? users.filter((user) => user.department === selectedDepartment)
+                : users;
+            const filteredUserIds = new Set(filteredUsers.map((user) => String(user.id)));
             const entries = shiftRequests
                 .flatMap((request) => getRequestDates(request).map((date) => ({ request, date })))
-                .filter((entry) => getFiscalYearFromDate(entry.date) === fiscalYear);
+                .filter((entry) => (
+                    getFiscalYearFromDate(entry.date) === fiscalYear
+                    && (!selectedDepartment || filteredUserIds.has(String(entry.request.userId)) || entry.request.department === selectedDepartment)
+                ));
             const approvedEntries = entries.filter(({ request }) => request.status === 'Approved');
             const userStats = new Map();
             const leaveTypeCounts = Object.fromEntries(leaveTypes.map((leaveType) => [leaveType, 0]));
 
-            users.forEach((user) => {
+            filteredUsers.forEach((user) => {
                 userStats.set(user.id, {
                     user,
                     monthCounts: Object.fromEntries(fiscalMonths.map((month) => [month.key, 0])),
