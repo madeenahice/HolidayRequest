@@ -6,6 +6,176 @@
     <title>ระบบขอเวร งานเวชศาสตร์ฉุกเฉิน</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --palette-coral: #FF8787;
+            --palette-peach: #F8C4B4;
+            --palette-cream: #E5EBB2;
+            --palette-green: #BCE29E;
+            --palette-ink: #3f4d37;
+            --palette-muted: #6d775f;
+            --palette-surface: #fffdf7;
+            --palette-soft: #fff6ee;
+            --palette-line: rgba(188, 226, 158, 0.65);
+        }
+
+        body {
+            background:
+                radial-gradient(circle at top left, rgba(255, 135, 135, 0.18), transparent 28rem),
+                radial-gradient(circle at top right, rgba(188, 226, 158, 0.24), transparent 30rem),
+                linear-gradient(180deg, #fffdf7 0%, #f7faee 100%) !important;
+            color: var(--palette-ink) !important;
+        }
+
+        nav {
+            background: linear-gradient(90deg, var(--palette-coral), var(--palette-peach)) !important;
+            color: #fffdf7 !important;
+            box-shadow: 0 10px 30px rgba(255, 135, 135, 0.25) !important;
+        }
+
+        nav span:not(#realtime-status) {
+            background: rgba(255, 253, 247, 0.22) !important;
+            color: #fffdf7 !important;
+        }
+
+        #btn-toggle-role,
+        #btn-admin-settings,
+        #btn-show-add-panel,
+        #admin-add-panel button,
+        #admin-password-modal #btn-admin-password-submit,
+        #reserve-modal #btn-reserve-confirm {
+            background: var(--palette-coral) !important;
+            color: #fffdf7 !important;
+            box-shadow: 0 8px 18px rgba(255, 135, 135, 0.18) !important;
+        }
+
+        #btn-toggle-role:hover,
+        #btn-admin-settings:hover,
+        #btn-show-add-panel:hover,
+        #admin-add-panel button:hover,
+        #admin-password-modal #btn-admin-password-submit:hover,
+        #reserve-modal #btn-reserve-confirm:hover {
+            background: #f46f73 !important;
+        }
+
+        #shift-form button[type="submit"],
+        #btn-admin-heatmap,
+        #promote-modal #btn-promote-confirm {
+            background: #88bd67 !important;
+            color: #fffdf7 !important;
+            box-shadow: 0 8px 18px rgba(188, 226, 158, 0.4) !important;
+        }
+
+        #shift-form button[type="submit"]:hover,
+        #btn-admin-heatmap:hover,
+        #promote-modal #btn-promote-confirm:hover {
+            background: #78ab58 !important;
+        }
+
+        #user-info-box {
+            background: rgba(229, 235, 178, 0.45) !important;
+            border-color: var(--palette-green) !important;
+        }
+
+        #user-info-box h3,
+        #user-info-box ul,
+        #form-section h2,
+        #admin-section h2,
+        #admin-section h3,
+        #admin-management-view h2,
+        #admin-management-view h3,
+        #admin-management-view h4,
+        #admin-heatmap-view h2 {
+            color: var(--palette-ink) !important;
+        }
+
+        #form-section,
+        #admin-section,
+        #calendar-view,
+        #admin-management-view,
+        #admin-heatmap-view,
+        #reserve-modal > div,
+        #promote-modal > div,
+        #day-detail-modal > div,
+        #admin-password-modal > div {
+            background: rgba(255, 253, 247, 0.96) !important;
+            border-color: var(--palette-line) !important;
+            box-shadow: 0 18px 40px rgba(188, 226, 158, 0.16) !important;
+        }
+
+        #admin-section,
+        #admin-management-view .bg-amber-50,
+        #admin-add-panel {
+            background: rgba(248, 196, 180, 0.22) !important;
+            border-color: rgba(255, 135, 135, 0.45) !important;
+        }
+
+        #form-section input,
+        #form-section select,
+        #admin-management-view input,
+        #admin-management-view select,
+        #admin-heatmap-view select,
+        #admin-password-input {
+            background: #fffdf7 !important;
+            border-color: rgba(188, 226, 158, 0.9) !important;
+            color: var(--palette-ink) !important;
+        }
+
+        #form-section input:focus,
+        #form-section select:focus,
+        #admin-management-view input:focus,
+        #admin-management-view select:focus,
+        #admin-heatmap-view select:focus,
+        #admin-password-input:focus {
+            box-shadow: 0 0 0 3px rgba(188, 226, 158, 0.45) !important;
+            border-color: var(--palette-green) !important;
+        }
+
+        #calendar-month-year,
+        #admin-heatmap-view h3 {
+            color: var(--palette-ink) !important;
+        }
+
+        #btn-prev-month,
+        #btn-next-month,
+        #btn-back-calendar,
+        #btn-back-calendar-from-heatmap,
+        #reserve-modal #btn-reserve-cancel,
+        #promote-modal #btn-promote-skip,
+        #admin-password-modal #btn-admin-password-cancel {
+            background: rgba(229, 235, 178, 0.46) !important;
+            color: var(--palette-ink) !important;
+        }
+
+        #btn-prev-month:hover,
+        #btn-next-month:hover,
+        #btn-back-calendar:hover,
+        #btn-back-calendar-from-heatmap:hover,
+        #reserve-modal #btn-reserve-cancel:hover,
+        #promote-modal #btn-promote-skip:hover,
+        #admin-password-modal #btn-admin-password-cancel:hover {
+            background: rgba(188, 226, 158, 0.55) !important;
+        }
+
+        #admin-heatmap-view > div:nth-of-type(2) > div {
+            background: rgba(188, 226, 158, 0.24) !important;
+            border-color: rgba(188, 226, 158, 0.6) !important;
+            color: var(--palette-muted) !important;
+        }
+
+        #heatmap-summary > div {
+            background: rgba(188, 226, 158, 0.22) !important;
+            border-color: rgba(188, 226, 158, 0.58) !important;
+        }
+
+        #heatmap-summary > div > div:first-child {
+            color: var(--palette-muted) !important;
+        }
+
+        #heatmap-summary > div > div:last-child {
+            color: var(--palette-ink) !important;
+        }
+    </style>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans min-h-screen">
 
@@ -209,7 +379,7 @@
         <div id="admin-heatmap-view" class="xl:col-span-2 bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-teal-200 hidden min-w-0">
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
                 <h2 class="text-lg md:text-xl font-bold text-teal-700 flex items-center gap-2">
-                    <i class="fa-solid fa-chart-simple"></i> สถิติการขอแลกเวร
+                    <i class="fa-solid fa-chart-simple"></i> สถิติการขอเวร
                 </h2>
                 <button id="btn-back-calendar-from-heatmap" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-semibold transition">
                     <i class="fa-solid fa-calendar-days mr-1"></i> กลับไปปฏิทิน
