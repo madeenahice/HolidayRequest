@@ -35,7 +35,7 @@
                 <ul class="text-xs text-blue-700 space-y-1 list-disc list-inside">
                     <li>ขอเวรได้ไม่เกิน 6 เดือนล่วงหน้า</li>
                     <li>ต้องขอภายในวันที่ 25 เช่น เวรสิงหาคมต้องขอภายใน 25 มิถุนายน</li>
-                    <li>หน่วยงานเดียวกันและ Level เดียวกัน ขอพร้อมกันได้ไม่เกิน 2 คน/วัน ยกเว้น Level 5 ได้ไม่เกิน 3 คน/วัน</li>
+                    <li>หน่วยงานเดียวกัน ตำแหน่งเดียวกัน และ Level เดียวกัน ขอพร้อมกันได้ไม่เกิน 2 คน/วัน ยกเว้น Level 5 ได้ไม่เกิน 3 คน/วัน</li>
                     <li>ผู้ที่ขอเวรเป็นประจำ อาจไม่ได้สิทธิ์ในรอบนั้น ๆ เพื่อกระจายให้คนอื่นอย่างเป็นธรรม</li>
                     <li class="font-bold text-red-600">หากต้องการยกเลิกเวร กรุณาติดต่อแอดมินเท่านั้น</li>
                 </ul>
@@ -1010,10 +1010,11 @@
             return longLeaveTypes.includes(leaveType);
         }
 
-        function getApprovedCount(dateStr, department, level) {
+        function getApprovedCount(dateStr, department, position, level) {
             return shiftRequests.filter((request) => (
                 getRequestDates(request).includes(dateStr)
                 && request.department === department
+                && request.position === position
                 && request.level === level
                 && request.status === 'Approved'
             )).length;
@@ -1090,7 +1091,7 @@
             }
 
             const quotaLimit = getQuotaLimit(user.level);
-            const isQuotaAvailable = requestedDates.every((date) => getApprovedCount(date, user.department, user.level) < quotaLimit);
+            const isQuotaAvailable = requestedDates.every((date) => getApprovedCount(date, user.department, user.position, user.level) < quotaLimit);
             if (isQuotaAvailable) {
                 const newRequest = {
                     id: Date.now(),
@@ -1159,9 +1160,9 @@
             const target = shiftRequests.find((request) => request.id === requestId);
             if (!target) return;
             const quotaLimit = getQuotaLimit(target.level);
-            const canApproveAllDates = getRequestDates(target).every((date) => getApprovedCount(date, target.department, target.level) < quotaLimit);
+            const canApproveAllDates = getRequestDates(target).every((date) => getApprovedCount(date, target.department, target.position, target.level) < quotaLimit);
             if (!canApproveAllDates) {
-                alert('ยังอนุมัติไม่ได้ เพราะโควตาของหน่วยงานและ Level นี้เต็มอยู่');
+                alert('ยังอนุมัติไม่ได้ เพราะโควตาของหน่วยงาน ตำแหน่ง และ Level นี้เต็มอยู่');
                 return;
             }
             target.status = 'Approved';
@@ -1189,6 +1190,7 @@
                 const reserves = shiftRequests
                     .filter((request) => (
                         request.level === targetShift.level
+                        && request.position === targetShift.position
                         && request.status === 'Pending'
                         && getRequestDates(request).some((date) => getRequestDates(targetShift).includes(date))
                     ))
@@ -1199,7 +1201,7 @@
                     const nextReserve = reserves[0];
                     const nextUser = findUserById(nextReserve.userId);
                     pendingPromoteData = nextReserve;
-                    document.getElementById('promote-modal-text').innerHTML = `โควตาวันที่ <strong>${getRequestDateText(targetShift)}</strong> หน่วยงาน <strong>${targetShift.department}</strong> กลุ่ม <strong>${targetShift.level}</strong> ว่างลงแล้ว! ตรวจพบตัวสำรองคิวแรกคือ <strong>${nextUser ? nextUser.name : 'ผู้ใช้'}</strong> คุณต้องการเลื่อนสิทธิ์ให้เป็นตัวจริงทันทีหรือไม่?`;
+                    document.getElementById('promote-modal-text').innerHTML = `โควตาวันที่ <strong>${getRequestDateText(targetShift)}</strong> หน่วยงาน <strong>${targetShift.department}</strong> ตำแหน่ง <strong>${targetShift.position}</strong> กลุ่ม <strong>${targetShift.level}</strong> ว่างลงแล้ว! ตรวจพบตัวสำรองคิวแรกคือ <strong>${nextUser ? nextUser.name : 'ผู้ใช้'}</strong> คุณต้องการเลื่อนสิทธิ์ให้เป็นตัวจริงทันทีหรือไม่?`;
                     document.getElementById('promote-modal').classList.remove('hidden');
                 } else {
                     alert('ลบรายการสำเร็จแล้ว (ไม่มีตัวสำรองในคิว)');
@@ -1217,7 +1219,7 @@
             const target = shiftRequests.find((request) => request.id === pendingPromoteData.id);
             if (target) {
                 const quotaLimit = getQuotaLimit(target.level);
-                const canPromoteAllDates = getRequestDates(target).every((date) => getApprovedCount(date, target.department, target.level) < quotaLimit);
+                const canPromoteAllDates = getRequestDates(target).every((date) => getApprovedCount(date, target.department, target.position, target.level) < quotaLimit);
                 if (!canPromoteAllDates) {
                     alert('ยังเลื่อนสิทธิ์ไม่ได้ เพราะบางวันในช่วงที่ขอโควตาเต็มอยู่');
                     document.getElementById('promote-modal').classList.add('hidden');
