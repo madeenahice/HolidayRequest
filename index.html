@@ -311,6 +311,16 @@
                 </button>
             </div>
 
+            <div class="mb-3 grid grid-cols-1 gap-2 rounded-xl border border-amber-100 bg-amber-50/60 p-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                <label class="text-xs font-semibold text-amber-800">
+                    กรองตามตำแหน่ง
+                    <select id="admin-position-filter" class="mt-1 w-full p-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500">
+                        <option value="">ทุกตำแหน่ง</option>
+                    </select>
+                </label>
+                <div id="admin-user-table-count" class="text-xs font-semibold text-amber-700 sm:text-right"></div>
+            </div>
+
             <div class="overflow-auto max-h-[520px] border border-gray-100 rounded-xl">
                 <table class="w-[900px] md:w-full text-sm text-left">
                     <thead class="bg-gray-50 text-gray-600 font-medium sticky top-0 z-10">
@@ -708,6 +718,7 @@
                 renderAdminAddPanel();
             });
             document.getElementById('admin-add-type').addEventListener('change', renderAdminAddPanel);
+            document.getElementById('admin-position-filter').addEventListener('change', renderAdminTable);
             document.getElementById('form-start-date').addEventListener('change', () => {
                 const startDate = document.getElementById('form-start-date').value;
                 const endDateInput = document.getElementById('form-end-date');
@@ -1918,7 +1929,29 @@
 
         function renderAdminTable() {
             const tbody = document.getElementById('admin-user-table');
-            tbody.innerHTML = users.map((user) => `
+            renderAdminPositionFilter();
+
+            const selectedPosition = document.getElementById('admin-position-filter')?.value || '';
+            const filteredUsers = selectedPosition
+                ? users.filter((user) => user.position === selectedPosition)
+                : users;
+            const countText = selectedPosition
+                ? `แสดง ${filteredUsers.length} จาก ${users.length} คน`
+                : `ทั้งหมด ${users.length} คน`;
+            document.getElementById('admin-user-table-count').innerText = countText;
+
+            if (!filteredUsers.length) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="p-6 text-center text-sm text-gray-500">
+                            ไม่พบเจ้าหน้าที่ในตำแหน่งที่เลือก
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = filteredUsers.map((user) => `
                 <tr class="hover:bg-gray-50 transition">
                     <td class="p-3 font-medium text-gray-700">
                         <input value="${user.name}" onchange="changeUserName(${user.id}, this.value)" class="w-full p-1.5 text-sm bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
@@ -1943,6 +1976,18 @@
                     </td>
                 </tr>
             `).join('');
+        }
+
+        function renderAdminPositionFilter() {
+            const select = document.getElementById('admin-position-filter');
+            if (!select) return;
+
+            const selectedPosition = select.value;
+            select.innerHTML = `
+                <option value="">ทุกตำแหน่ง</option>
+                ${positions.map((position) => `<option value="${position}">${position}</option>`).join('')}
+            `;
+            select.value = positions.includes(selectedPosition) ? selectedPosition : '';
         }
 
         function renderAdminSettings() {
