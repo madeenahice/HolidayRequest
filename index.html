@@ -404,7 +404,7 @@
                 </button>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
                 <label class="text-xs font-semibold text-gray-600">
                     ปีงบประมาณ
                     <select id="heatmap-fiscal-year" class="mt-1 w-full p-2 text-sm bg-white border border-teal-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500"></select>
@@ -412,6 +412,10 @@
                 <label class="text-xs font-semibold text-gray-600">
                     หน่วยงาน
                     <select id="heatmap-department" class="mt-1 w-full p-2 text-sm bg-white border border-teal-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500"></select>
+                </label>
+                <label class="text-xs font-semibold text-gray-600">
+                    ตำแหน่ง
+                    <select id="heatmap-position" class="mt-1 w-full p-2 text-sm bg-white border border-teal-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500"></select>
                 </label>
                 <div class="rounded-lg border border-teal-100 bg-teal-50 p-3 text-xs text-teal-800">
                     นับตามจำนวนวันที่มีคำขอเวรในระบบ สีเข้มหมายถึงขอบ่อยกว่า
@@ -711,6 +715,9 @@
                 renderAdminHeatmap(false);
             });
             document.getElementById('heatmap-department').addEventListener('change', () => {
+                renderAdminHeatmap(false);
+            });
+            document.getElementById('heatmap-position').addEventListener('change', () => {
                 renderAdminHeatmap(false);
             });
             document.getElementById('btn-show-add-panel').addEventListener('click', () => {
@@ -2124,6 +2131,17 @@
             select.value = departments.includes(previousValue) ? previousValue : '';
         }
 
+        function renderHeatmapPositionOptions() {
+            const select = document.getElementById('heatmap-position');
+            if (!select) return;
+            const previousValue = select.value;
+            select.innerHTML = [
+                '<option value="">ทุกตำแหน่ง</option>',
+                ...positions.map((position) => `<option value="${position}">${position}</option>`)
+            ].join('');
+            select.value = positions.includes(previousValue) ? previousValue : '';
+        }
+
         function renderHeatmapMonthOptions() {
             const fiscalYear = Number(document.getElementById('heatmap-fiscal-year').value);
             const monthSelect = document.getElementById('heatmap-month');
@@ -2174,21 +2192,24 @@
             if (resetOptions) {
                 renderHeatmapFiscalYearOptions();
                 renderHeatmapDepartmentOptions();
+                renderHeatmapPositionOptions();
             }
             heatmapDetailCache = {};
 
             const fiscalYear = Number(document.getElementById('heatmap-fiscal-year').value);
             const selectedDepartment = document.getElementById('heatmap-department').value;
+            const selectedPosition = document.getElementById('heatmap-position').value;
             const fiscalMonths = getFiscalMonths(fiscalYear);
-            const filteredUsers = selectedDepartment
-                ? users.filter((user) => user.department === selectedDepartment)
-                : users;
+            const filteredUsers = users.filter((user) => (
+                (!selectedDepartment || user.department === selectedDepartment)
+                && (!selectedPosition || user.position === selectedPosition)
+            ));
             const filteredUserIds = new Set(filteredUsers.map((user) => String(user.id)));
             const entries = shiftRequests
                 .flatMap((request) => getRequestDates(request).map((date) => ({ request, date })))
                 .filter((entry) => (
                     getFiscalYearFromDate(entry.date) === fiscalYear
-                    && (!selectedDepartment || filteredUserIds.has(String(entry.request.userId)) || entry.request.department === selectedDepartment)
+                    && filteredUserIds.has(String(entry.request.userId))
                 ));
             const approvedEntries = entries.filter(({ request }) => request.status === 'Approved');
             const userStats = new Map();
