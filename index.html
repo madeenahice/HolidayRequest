@@ -2168,6 +2168,28 @@
             alert(detail);
         };
 
+        function formatHeatmapDateList(dates = []) {
+            return [...new Set(dates)]
+                .sort()
+                .map((date) => formatDisplayDate(date))
+                .join(', ');
+        }
+
+        function makeHeatmapCountButton(count, detailKey, detailText, activeClass = 'text-teal-700') {
+            if (!count) {
+                return `<span class="text-gray-300"></span>`;
+            }
+            heatmapDetailCache[detailKey] = detailText;
+            return `
+                <button type="button"
+                    onclick="showHeatmapMonthDetail('${detailKey}')"
+                    class="rounded-md px-2 py-1 text-xs font-semibold ${activeClass} hover:bg-teal-50 hover:ring-2 hover:ring-teal-200"
+                    title="${detailText.replace(/"/g, '&quot;')}">
+                    ${count}
+                </button>
+            `;
+        }
+
         function makeUserHeatmapRow(user, counts, keys, maxCount, details = {}) {
             const total = keys.reduce((sum, key) => sum + (counts[key] || 0), 0);
             return `
@@ -2221,6 +2243,7 @@
                     monthCounts: Object.fromEntries(fiscalMonths.map((month) => [month.key, 0])),
                     monthDetails: Object.fromEntries(fiscalMonths.map((month) => [month.key, {}])),
                     leaveCounts: Object.fromEntries(leaveTypes.map((leaveType) => [leaveType, 0])),
+                    leaveDetails: Object.fromEntries(leaveTypes.map((leaveType) => [leaveType, []])),
                     total: 0
                 });
             });
@@ -2232,16 +2255,19 @@
                 stats.monthCounts[monthKey] = (stats.monthCounts[monthKey] || 0) + 1;
                 const leaveType = request.leaveType || '-';
                 if (!stats.monthDetails[monthKey]) stats.monthDetails[monthKey] = {};
-                stats.monthDetails[monthKey][leaveType] = (stats.monthDetails[monthKey][leaveType] || 0) + 1;
+                if (!stats.monthDetails[monthKey][leaveType]) stats.monthDetails[monthKey][leaveType] = [];
+                stats.monthDetails[monthKey][leaveType].push(date);
                 stats.total += 1;
             });
 
-            approvedEntries.forEach(({ request }) => {
+            approvedEntries.forEach(({ request, date }) => {
                 const stats = userStats.get(request.userId);
                 if (!stats) return;
                 const leaveType = request.leaveType || '-';
                 leaveTypeCounts[leaveType] = (leaveTypeCounts[leaveType] || 0) + 1;
                 stats.leaveCounts[leaveType] = (stats.leaveCounts[leaveType] || 0) + 1;
+                if (!stats.leaveDetails[leaveType]) stats.leaveDetails[leaveType] = [];
+                stats.leaveDetails[leaveType].push(date);
             });
 
             const activeStats = [...userStats.values()]
@@ -2266,9 +2292,9 @@
             const getMonthDetailText = (stats, monthKey) => {
                 const details = stats.monthDetails[monthKey] || {};
                 const rows = Object.entries(details)
-                    .filter(([, count]) => count > 0)
-                    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'th'))
-                    .map(([leaveType, count]) => `${leaveType}: ${count} วัน`);
+                    .filter(([, dates]) => dates.length > 0)
+                    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], 'th'))
+                    .map(([leaveType, dates]) => `${leaveType}: ${dates.length} วัน\nวันที่: ${formatHeatmapDateList(dates)}`);
                 return rows.length
                     ? `${stats.user.name}\n${monthDetailLabels[monthKey]}\n${rows.join('\n')}`
                     : `${stats.user.name}\n${monthDetailLabels[monthKey]}\nไม่มีรายการลา`;
@@ -2318,9 +2344,19 @@
                                     </td>
                                     ${activeLeaveTypes.map((leaveType) => {
                                         const count = stats.leaveCounts[leaveType] || 0;
-                                        return `<td class="p-3 text-center text-xs font-semibold ${count ? 'text-teal-700' : 'text-gray-300'}">${count || ''}</td>`;
+                                        const detailText = `${stats.user.name}\n${leaveType}: ${count} วัน\nวันที่: ${formatHeatmapDateList(stats.leaveDetails[leaveType] || [])}`;
+                                        const detailKey = `${stats.user.id}|leave|${leaveType}`;
+                                        return `<td class="p-3 text-center">${makeHeatmapCountButton(count, detailKey, detailText)}</td>`;
                                     }).join('')}
-                                    <td class="p-3 text-center text-xs font-bold text-gray-700">${activeLeaveTypes.reduce((sum, leaveType) => sum + (stats.leaveCounts[leaveType] || 0), 0)}</td>
+                                    <td class="p-3 text-center">
+                                        ${(() => {
+                                            const total = activeLeaveTypes.reduce((sum, leaveType) => sum + (stats.leaveCounts[leaveType] || 0), 0);
+                                            const totalDates = activeLeaveTypes.flatMap((leaveType) => stats.leaveDetails[leaveType] || []);
+                                            const detailText = `${stats.user.name}\nรวม: ${total} วัน\nวันที่: ${formatHeatmapDateList(totalDates)}`;
+                                            const detailKey = `${stats.user.id}|leave|total`;
+                                            return makeHeatmapCountButton(total, detailKey, detailText, 'text-gray-700');
+                                        })()}
+                                    </td>
                                 </tr>
                             `).join('')}
                         </tbody>
