@@ -509,6 +509,11 @@
         let pendingReserveData = null;
         let pendingPromoteData = null;
         let heatmapDetailCache = {};
+        const heatmapPageSizeOptions = [10, 15, 20, 25];
+        const heatmapPagination = {
+            yearly: { page: 1, pageSize: 10 },
+            leave: { page: 1, pageSize: 10 }
+        };
         let realtimeTimerId = null;
         let realtimeRefreshTimerId = null;
         let lastRealtimeSignature = '';
@@ -715,12 +720,15 @@
                 showCalendarView();
             });
             document.getElementById('heatmap-fiscal-year').addEventListener('change', () => {
+                resetHeatmapPagination();
                 renderAdminHeatmap(false);
             });
             document.getElementById('heatmap-department').addEventListener('change', () => {
+                resetHeatmapPagination();
                 renderAdminHeatmap(false);
             });
             document.getElementById('heatmap-position').addEventListener('change', () => {
+                resetHeatmapPagination();
                 renderAdminHeatmap(false);
             });
             document.getElementById('btn-show-add-panel').addEventListener('click', () => {
@@ -2300,11 +2308,75 @@
             `;
         }
 
+        function resetHeatmapPagination() {
+            heatmapPagination.yearly.page = 1;
+            heatmapPagination.leave.page = 1;
+        }
+
+        function getHeatmapPagination(kind, totalItems) {
+            const pagination = heatmapPagination[kind];
+            const totalPages = Math.max(1, Math.ceil(totalItems / pagination.pageSize));
+            pagination.page = Math.min(Math.max(1, pagination.page), totalPages);
+            const startIndex = (pagination.page - 1) * pagination.pageSize;
+            return {
+                page: pagination.page,
+                pageSize: pagination.pageSize,
+                totalPages,
+                startIndex,
+                endIndex: Math.min(startIndex + pagination.pageSize, totalItems)
+            };
+        }
+
+        function makeHeatmapPaginationControls(kind, totalItems) {
+            const pagination = getHeatmapPagination(kind, totalItems);
+            const startDisplay = totalItems ? pagination.startIndex + 1 : 0;
+            const prevDisabled = pagination.page <= 1 ? 'disabled' : '';
+            const nextDisabled = pagination.page >= pagination.totalPages ? 'disabled' : '';
+            const buttonClass = 'rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40';
+
+            return `
+                <div class="flex flex-col gap-2 border-b border-gray-100 bg-white p-3 text-xs text-gray-600 sm:flex-row sm:items-center sm:justify-between">
+                    <label class="flex items-center gap-2 font-semibold">
+                        แสดง
+                        <select onchange="setHeatmapPageSize('${kind}', this.value)" class="rounded-lg border border-gray-200 bg-white p-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500">
+                            ${heatmapPageSizeOptions.map((size) => `<option value="${size}" ${size === pagination.pageSize ? 'selected' : ''}>${size}</option>`).join('')}
+                        </select>
+                        รายชื่อ
+                    </label>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span>${startDisplay}-${pagination.endIndex} จาก ${totalItems} รายชื่อ</span>
+                        <button type="button" class="${buttonClass}" onclick="changeHeatmapPage('${kind}', -1)" ${prevDisabled}>
+                            ก่อนหน้า
+                        </button>
+                        <span class="font-semibold text-gray-700">หน้า ${pagination.page}/${pagination.totalPages}</span>
+                        <button type="button" class="${buttonClass}" onclick="changeHeatmapPage('${kind}', 1)" ${nextDisabled}>
+                            ถัดไป
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        window.setHeatmapPageSize = function(kind, pageSize) {
+            if (!heatmapPagination[kind]) return;
+            const numericPageSize = Number(pageSize);
+            heatmapPagination[kind].pageSize = heatmapPageSizeOptions.includes(numericPageSize) ? numericPageSize : 10;
+            heatmapPagination[kind].page = 1;
+            renderAdminHeatmap(false);
+        };
+
+        window.changeHeatmapPage = function(kind, direction) {
+            if (!heatmapPagination[kind]) return;
+            heatmapPagination[kind].page += Number(direction);
+            renderAdminHeatmap(false);
+        };
+
         function renderAdminHeatmap(resetOptions = true) {
             if (resetOptions) {
                 renderHeatmapFiscalYearOptions();
                 renderHeatmapDepartmentOptions();
                 renderHeatmapPositionOptions();
+                resetHeatmapPagination();
             }
             heatmapDetailCache = {};
 
@@ -2389,8 +2461,12 @@
                     ? `${stats.user.name}\n${monthDetailLabels[monthKey]}\n${rows.join('\n')}`
                     : `${stats.user.name}\n${monthDetailLabels[monthKey]}\nไม่มีรายการลา`;
             };
+            const yearlyPagination = getHeatmapPagination('yearly', activeStats.length);
+            const yearlyPageStats = activeStats.slice(yearlyPagination.startIndex, yearlyPagination.endIndex);
             document.getElementById('heatmap-yearly').innerHTML = activeStats.length
                 ? `
+                    ${makeHeatmapPaginationControls('yearly', activeStats.length)}
+                    <div class="overflow-x-auto">
                     <table class="min-w-[860px] w-full text-left">
                         <thead class="bg-gray-50 text-xs text-gray-500">
                             <tr>
@@ -2400,7 +2476,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${activeStats.map((stats) => makeUserHeatmapRow(
+                            ${yearlyPageStats.map((stats) => makeUserHeatmapRow(
                                 stats.user,
                                 stats.monthCounts,
                                 fiscalMonths.map((month) => month.key),
@@ -2409,13 +2485,17 @@
                             )).join('')}
                         </tbody>
                     </table>
+                    </div>
                 `
                 : '<div class="p-4 text-sm text-gray-500">ยังไม่มีข้อมูลคำขอเวรในปีงบนี้</div>';
 
             const activeLeaveTypes = leaveTypes.filter((leaveType) => (leaveTypeCounts[leaveType] || 0) > 0);
             const approvedLeaveStats = activeStats.filter((stats) => activeLeaveTypes.some((leaveType) => (stats.leaveCounts[leaveType] || 0) > 0));
+            const leavePagination = getHeatmapPagination('leave', approvedLeaveStats.length);
+            const leavePageStats = approvedLeaveStats.slice(leavePagination.startIndex, leavePagination.endIndex);
             document.getElementById('heatmap-leave-summary').innerHTML = approvedLeaveStats.length && activeLeaveTypes.length
                 ? `
+                    ${makeHeatmapPaginationControls('leave', approvedLeaveStats.length)}
                     <div class="overflow-x-auto">
                     <table class="min-w-[720px] w-full text-left text-sm">
                         <thead class="bg-gray-50 text-xs text-gray-500">
@@ -2426,7 +2506,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${approvedLeaveStats.map((stats) => `
+                            ${leavePageStats.map((stats) => `
                                 <tr class="border-t border-gray-100">
                                     <td class="sticky left-0 z-10 bg-white p-3 text-xs font-semibold text-gray-700 min-w-[180px]">
                                         ${stats.user.name}
