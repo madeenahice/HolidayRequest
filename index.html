@@ -698,7 +698,10 @@
                 renderUserDropdowns();
                 renderCalendar();
             });
-            document.getElementById('form-position-select').addEventListener('change', renderUserDropdowns);
+            document.getElementById('form-position-select').addEventListener('change', () => {
+                renderUserDropdowns();
+                renderCalendar();
+            });
             document.getElementById('btn-admin-settings').addEventListener('click', () => {
                 showAdminManagementView();
             });
@@ -1755,6 +1758,11 @@
             calendarDaysContainer.innerHTML = '';
 
             const selectedCalendarDepartment = document.getElementById('form-department-select').value || departments[0];
+            const selectedCalendarPosition = document.getElementById('form-position-select').value;
+            const matchesCalendarFilters = (request) => (
+                request.department === selectedCalendarDepartment
+                && request.position === selectedCalendarPosition
+            );
             const slots = [];
             for (let i = 0; i < firstDayIndex; i += 1) {
                 slots.push(null);
@@ -1784,7 +1792,7 @@
                 const calendarGapRem = 0.5;
                 const dayHorizontalPaddingRem = 0.5;
                 const weekSegments = shiftRequests
-                    .filter((request) => request.department === selectedCalendarDepartment)
+                    .filter(matchesCalendarFilters)
                     .map((request) => {
                         const requestDates = getRequestDates(request).filter((date) => weekDates.includes(date));
                         if (!requestDates.length) return null;
@@ -1836,7 +1844,7 @@
 
                     const dayRequests = shiftRequests.filter((request) => (
                         getRequestDates(request).includes(fullDateStr)
-                        && request.department === selectedCalendarDepartment
+                        && matchesCalendarFilters(request)
                     ));
                     const dayTooltip = dayRequests.map(getRequestTooltip).join('\n');
                     if (dayTooltip) {
