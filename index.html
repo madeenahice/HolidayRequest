@@ -518,7 +518,7 @@
             'Level 2': { bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
             'Level 3': { bg: 'bg-indigo-50 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500' },
             'Level 4': { bg: 'bg-purple-50 text-purple-700 border-purple-200', dot: 'bg-purple-500' },
-            'Level 5': { bg: 'bg-pink-50 text-pink-700 border-pink-200', dot: 'bg-pink-500' }
+            'Level 5': { bg: 'bg-[#fff4e5] text-[#a75f00] border-[#F99417]/40', dot: 'bg-[#F99417]' }
         };
         const pendingRequestColor = { bg: 'bg-orange-50 text-orange-800 border-orange-300', dot: 'bg-orange-500' };
         const departmentShortNames = {
@@ -866,13 +866,28 @@
         }
 
         function findUserByRequestRecord(record) {
-            return users.find((user) => (
-                String(record.userId || '') && String(user.id) === String(record.userId)
-            )) || users.find((user) => (
+            const exactMatch = users.find((user) => (
                 normalizeName(user.name) === normalizeName(record.name)
                 && user.department === record.department
                 && user.position === record.position
                 && user.level === record.level
+            ));
+            if (exactMatch) return exactMatch;
+
+            const samePositionMatch = users.find((user) => (
+                normalizeName(user.name) === normalizeName(record.name)
+                && user.department === record.department
+                && user.position === record.position
+            ));
+            if (samePositionMatch) return samePositionMatch;
+
+            const nameMatches = users.filter((user) => normalizeName(user.name) === normalizeName(record.name));
+            if (nameMatches.length === 1) return nameMatches[0];
+
+            if (String(record.name || '').trim()) return null;
+
+            return users.find((user) => (
+                String(record.userId || '') && String(user.id) === String(record.userId)
             ));
         }
 
@@ -1044,7 +1059,7 @@
             return {
                 requestId: request.id,
                 userId: request.userId,
-                name: user ? user.name : (request.name || ''),
+                name: request.name || (user ? user.name : ''),
                 department: request.department,
                 position: request.position,
                 level: request.level,
@@ -1168,9 +1183,8 @@
         }
 
         function getRequestTooltip(request) {
-            const user = findUserById(request.userId);
             const trainingText = request.trainingNote ? ` | หมายเหตุ: ${request.trainingNote}` : '';
-            return `${user ? user.name : (request.name || 'ผู้ใช้')} | ${request.department} | ${request.position} | ${request.level} | ${request.leaveType || '-'}${trainingText} | ${getRequestDateText(request)} | ${request.status === 'Pending' ? 'ตัวสำรอง' : 'อนุมัติ'}`;
+            return `${request.name || 'ผู้ใช้'} | ${request.department} | ${request.position} | ${request.level} | ${request.leaveType || '-'}${trainingText} | ${getRequestDateText(request)} | ${request.status === 'Pending' ? 'ตัวสำรอง' : 'อนุมัติ'}`;
         }
 
         function openDayDetail(dateStr, requests) {
@@ -1181,7 +1195,6 @@
                 list.innerHTML = '<div class="rounded-lg border border-dashed border-gray-200 p-3 text-sm text-gray-500">ไม่มีรายการขอเวร</div>';
             } else {
                 list.innerHTML = requests.map((request) => {
-                    const user = findUserById(request.userId);
                     const colorStyle = getRequestColorStyle(request);
                     const adminActions = currentRole === 'admin'
                         ? `
@@ -1194,7 +1207,7 @@
                     const trainingText = request.trainingNote ? `<div class="text-xs opacity-80">หมายเหตุ: ${request.trainingNote}</div>` : '';
                     return `
                         <div class="rounded-lg border p-3 ${colorStyle.bg}">
-                            <div class="font-bold">${request.status === 'Pending' ? '<span class="text-red-600">[รอ]</span> ' : ''}${user ? user.name : (request.name || 'ผู้ใช้')}</div>
+                            <div class="font-bold">${request.status === 'Pending' ? '<span class="text-red-600">[รอ]</span> ' : ''}${request.name || 'ผู้ใช้'}</div>
                             <div class="text-xs opacity-80">${request.leaveType || '-'} • ${request.level} • ${request.position} • ${request.department}</div>
                             <div class="text-xs opacity-80">${getRequestDateText(request)}</div>
                             ${trainingText}
@@ -1846,8 +1859,7 @@
 
                     startingSegments.forEach((segment) => {
                         const request = segment.request;
-                        const user = findUserById(request.userId);
-                        const displayName = user ? user.name : (request.name || 'ผู้ใช้');
+                        const displayName = request.name || 'ผู้ใช้';
 
                         const colorStyle = getRequestColorStyle(request);
                         const levelLabel = normalizeLevelName(request.level).replace('Level ', 'L');
@@ -2449,7 +2461,7 @@
 
             container.innerHTML = pending.map((request) => {
                 const user = findUserById(request.userId);
-                const displayName = user ? user.name : (request.name || 'ผู้ใช้');
+                const displayName = request.name || (user ? user.name : 'ผู้ใช้');
                 const trainingText = request.trainingNote ? ` • หมายเหตุ: ${request.trainingNote}` : '';
                 return `
                     <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
