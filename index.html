@@ -2172,10 +2172,69 @@
         };
 
         function formatHeatmapDateList(dates = []) {
-            return [...new Set(dates)]
-                .sort()
-                .map((date) => formatDisplayDate(date))
-                .join(', ');
+            const uniqueDates = [...new Set(dates)].sort();
+            if (!uniqueDates.length) return '-';
+
+            const thaiMonths = [
+                'มกราคม',
+                'กุมภาพันธ์',
+                'มีนาคม',
+                'เมษายน',
+                'พฤษภาคม',
+                'มิถุนายน',
+                'กรกฎาคม',
+                'สิงหาคม',
+                'กันยายน',
+                'ตุลาคม',
+                'พฤศจิกายน',
+                'ธันวาคม'
+            ];
+            const parseDate = (dateStr) => new Date(`${dateStr}T00:00:00`);
+            const addOneDay = (date) => {
+                const nextDate = new Date(date);
+                nextDate.setDate(nextDate.getDate() + 1);
+                return nextDate;
+            };
+            const isSameDate = (date, dateStr) => formatDateInput(date) === dateStr;
+            const formatSingleDate = (dateStr) => {
+                const date = parseDate(dateStr);
+                return `${date.getDate()} ${thaiMonths[date.getMonth()]} ${date.getFullYear() + 543}`;
+            };
+            const formatRange = (startDateStr, endDateStr) => {
+                if (startDateStr === endDateStr) return formatSingleDate(startDateStr);
+
+                const startDate = parseDate(startDateStr);
+                const endDate = parseDate(endDateStr);
+                const startDay = startDate.getDate();
+                const endDay = endDate.getDate();
+                const startMonth = thaiMonths[startDate.getMonth()];
+                const endMonth = thaiMonths[endDate.getMonth()];
+                const startYear = startDate.getFullYear() + 543;
+                const endYear = endDate.getFullYear() + 543;
+
+                if (startDate.getMonth() === endDate.getMonth() && startYear === endYear) {
+                    return `${startDay}-${endDay} ${startMonth} ${startYear}`;
+                }
+                if (startYear === endYear) {
+                    return `${startDay} ${startMonth} - ${endDay} ${endMonth} ${startYear}`;
+                }
+                return `${startDay} ${startMonth} ${startYear} - ${endDay} ${endMonth} ${endYear}`;
+            };
+
+            const ranges = [];
+            let rangeStart = uniqueDates[0];
+            let rangeEnd = uniqueDates[0];
+            for (let index = 1; index < uniqueDates.length; index += 1) {
+                if (isSameDate(addOneDay(parseDate(rangeEnd)), uniqueDates[index])) {
+                    rangeEnd = uniqueDates[index];
+                } else {
+                    ranges.push(formatRange(rangeStart, rangeEnd));
+                    rangeStart = uniqueDates[index];
+                    rangeEnd = uniqueDates[index];
+                }
+            }
+            ranges.push(formatRange(rangeStart, rangeEnd));
+            return ranges.join(', ');
         }
 
         function makeHeatmapCountButton(count, detailKey, detailText, activeClass = 'text-teal-700') {
