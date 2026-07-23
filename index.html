@@ -2099,7 +2099,7 @@
 
         function getHeatmapFiscalYears() {
             const years = [...new Set(shiftRequests.flatMap((request) => getRequestDates(request).map(getFiscalYearFromDate)))];
-            years.push(2026, getFiscalYearFromDate(formatDateInput(currentDate)));
+            years.push(2026, getFiscalYearFromDate(formatDateInput(requestToday)));
             return years.sort((a, b) => b - a);
         }
 
@@ -2116,8 +2116,11 @@
             if (!select) return;
             const previousValue = select.value;
             const years = [...new Set(getHeatmapFiscalYears())];
+            const currentFiscalYear = getFiscalYearFromDate(formatDateInput(requestToday));
             select.innerHTML = years.map((year) => `<option value="${year}">ปีงบ ${formatFullThaiYear(year)}</option>`).join('');
-            select.value = years.includes(Number(previousValue)) ? previousValue : String(years[0]);
+            select.value = years.includes(Number(previousValue))
+                ? previousValue
+                : String(years.includes(currentFiscalYear) ? currentFiscalYear : years[0]);
         }
 
         function renderHeatmapDepartmentOptions() {
