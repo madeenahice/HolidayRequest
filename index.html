@@ -258,12 +258,14 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-600 mb-1">วันเริ่มต้น</label>
-                        <input type="date" id="form-start-date" required class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                        <input type="date" id="form-start-date" lang="th-TH" required class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                        <p id="form-start-date-thai" class="text-[11px] font-semibold text-teal-700 mt-1"></p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-600 mb-1">วันสิ้นสุด</label>
-                        <input type="date" id="form-end-date" required class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none">
-                        <p class="text-[11px] text-gray-400 mt-1">ผู้ใช้ทั่วไปขอได้ไม่เกิน 6 เดือน และต้องทันรอบวันที่ 25</p>
+                        <input type="date" id="form-end-date" lang="th-TH" required class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                        <p id="form-end-date-thai" class="text-[11px] font-semibold text-teal-700 mt-1"></p>
+                        <p class="text-[11px] text-gray-400 mt-1">วันที่ 25 ยังขอเวรของเดือนถัดไปอีก 2 เดือนได้ เช่น 25 ก.ค. ขอเวรเดือน ก.ย.; ตั้งแต่ 26 ก.ค. จะเริ่มขอเวรเดือน ต.ค.</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-600 mb-1">เวรที่ขอ</label>
@@ -600,9 +602,21 @@
 
         function formatDisplayDate(dateStrOrDate) {
             const date = dateStrOrDate instanceof Date ? dateStrOrDate : new Date(`${dateStrOrDate}T00:00:00`);
-            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            const day = String(date.getDate()).padStart(2, '0');
-            return `${day}/${monthNames[date.getMonth()]}/${date.getFullYear()}`;
+            const monthNames = [
+                'มกราคม',
+                'กุมภาพันธ์',
+                'มีนาคม',
+                'เมษายน',
+                'พฤษภาคม',
+                'มิถุนายน',
+                'กรกฎาคม',
+                'สิงหาคม',
+                'กันยายน',
+                'ตุลาคม',
+                'พฤศจิกายน',
+                'ธันวาคม'
+            ];
+            return `${date.getDate()} ${monthNames[date.getMonth()]} ${date.getFullYear() + 543}`;
         }
 
         function addMonths(date, months) {
@@ -641,6 +655,16 @@
             if (force || !endInput.value || endInput.value < startInput.value) {
                 endInput.value = startInput.value;
             }
+            updateRequestDateDisplays();
+        }
+
+        function updateRequestDateDisplays() {
+            const startInput = document.getElementById('form-start-date');
+            const endInput = document.getElementById('form-end-date');
+            const startText = document.getElementById('form-start-date-thai');
+            const endText = document.getElementById('form-end-date-thai');
+            if (startText) startText.innerText = startInput.value ? `วันที่เลือก: ${formatDisplayDate(startInput.value)}` : '';
+            if (endText) endText.innerText = endInput.value ? `วันที่เลือก: ${formatDisplayDate(endInput.value)}` : '';
         }
 
         function applyDateLimits() {
@@ -859,6 +883,10 @@
                 if (endDateInput.value && startDate && endDateInput.value < startDate) {
                     endDateInput.value = startDate;
                 }
+                updateRequestDateDisplays();
+            });
+            document.getElementById('form-end-date').addEventListener('change', () => {
+                updateRequestDateDisplays();
             });
 
             document.getElementById('btn-reserve-cancel').addEventListener('click', () => {
