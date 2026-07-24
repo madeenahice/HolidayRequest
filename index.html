@@ -106,6 +106,7 @@
         #promote-modal > div,
         #day-detail-modal > div,
         #monthly-action-modal > div,
+        #thai-date-picker-modal > div,
         #admin-password-modal > div {
             background: rgba(255, 253, 247, 0.96) !important;
             border-color: var(--palette-line) !important;
@@ -231,8 +232,8 @@
             <div id="user-info-box" class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-xl shadow-sm">
                 <h3 class="font-bold text-blue-800 mb-1"><i class="fa-solid fa-circle-info mr-1"></i> กฎการขอเวร</h3>
                 <ul class="text-xs text-blue-700 space-y-1 list-disc list-inside">
-                    <li>ขอเวรได้ไม่เกิน 6 เดือนล่วงหน้า</li>
-                    <li>ต้องขอภายในวันที่ 25 เช่น เวรสิงหาคมต้องขอภายใน 25 มิถุนายน</li>
+                    <li>ขอเวรได้ไม่เกิน 6 เดือน นับจากเดือนแรกที่ระบบเปิดให้ขอเวร</li>
+                    <li>ต้องขอภายในวันที่ 25 เช่น เวรสิงหาคมต้องขอภายใน 25 มิถุนายน และเวรกันยายนต้องขอภายใน 25 กรกฎาคม</li>
                     <li>หน่วยงานเดียวกัน ตำแหน่งเดียวกัน และ Level เดียวกัน ขอพร้อมกันได้ไม่เกิน 2 คน/วัน ยกเว้น Level 5 ได้ไม่เกิน 3 คน/วัน</li>
                     <li>ผู้ที่ขอเวรเป็นประจำ อาจไม่ได้สิทธิ์ในรอบนั้น ๆ เพื่อกระจายให้คนอื่นอย่างเป็นธรรม</li>
                     <li class="font-bold text-red-600">หากต้องการยกเลิกเวร กรุณาติดต่อแอดมินเท่านั้น</li>
@@ -258,12 +259,14 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-600 mb-1">วันเริ่มต้น</label>
-                        <input type="date" id="form-start-date" lang="th-TH" required class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                        <input type="hidden" id="form-start-date">
+                        <button type="button" id="btn-form-start-date" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-left focus:ring-2 focus:ring-teal-500 focus:outline-none">เลือกวันที่</button>
                         <p id="form-start-date-thai" class="text-[11px] font-semibold text-teal-700 mt-1"></p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-600 mb-1">วันสิ้นสุด</label>
-                        <input type="date" id="form-end-date" lang="th-TH" required class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                        <input type="hidden" id="form-end-date">
+                        <button type="button" id="btn-form-end-date" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-left focus:ring-2 focus:ring-teal-500 focus:outline-none">เลือกวันที่</button>
                         <p id="form-end-date-thai" class="text-[11px] font-semibold text-teal-700 mt-1"></p>
                         <p class="text-[11px] text-gray-400 mt-1">วันที่ 25 ยังขอเวรของเดือนถัดไปอีก 2 เดือนได้ เช่น 25 ก.ค. ขอเวรเดือน ก.ย.; ตั้งแต่ 26 ก.ค. จะเริ่มขอเวรเดือน ต.ค.</p>
                     </div>
@@ -516,6 +519,28 @@
         </div>
     </div>
 
+    <div id="thai-date-picker-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <button id="btn-thai-date-prev" type="button" class="rounded-full p-2 text-gray-500 hover:bg-gray-100">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+                <h3 id="thai-date-picker-title" class="text-base font-bold text-gray-800"></h3>
+                <button id="btn-thai-date-next" type="button" class="rounded-full p-2 text-gray-500 hover:bg-gray-100">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </div>
+            <div class="grid grid-cols-7 gap-1 text-center text-xs font-bold text-gray-500 mb-2">
+                <div>อา.</div><div>จ.</div><div>อ.</div><div>พ.</div><div>พฤ.</div><div>ศ.</div><div>ส.</div>
+            </div>
+            <div id="thai-date-picker-days" class="grid grid-cols-7 gap-1"></div>
+            <div class="mt-4 flex justify-between gap-2">
+                <button id="btn-thai-date-close" type="button" class="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200">ปิด</button>
+                <button id="btn-thai-date-today" type="button" class="rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">วันนี้</button>
+            </div>
+        </div>
+    </div>
+
     <div id="admin-password-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl">
             <h3 class="text-lg font-bold text-gray-800 mb-3">เข้าสู่ระบบ Admin</h3>
@@ -535,6 +560,8 @@
 
         let shiftRequests = [];
         let currentRole = 'user';
+        let activeDatePickerField = null;
+        let activeDatePickerMonth = null;
         // Paste the deployed Google Apps Script Web App URL here to save requests to the target Google Sheet.
         const GOOGLE_SHEET_LOG_URL = 'https://script.google.com/macros/s/AKfycbyETA6KgUmne2b3PLkPmsl2BrESLOfw1i9r4x5qjxqBkvJD5V3m3n79n94ufUWGGFn9/exec';
         const requestToday = new Date();
@@ -640,6 +667,11 @@
             return candidate;
         }
 
+        function getLastAllowedUserDate() {
+            const firstAllowedDate = getFirstAllowedUserDate();
+            return new Date(firstAllowedDate.getFullYear(), firstAllowedDate.getMonth() + 6, 0);
+        }
+
         function showFirstAllowedUserMonth() {
             const firstAllowedDate = getFirstAllowedUserDate();
             currentDate = new Date(firstAllowedDate.getFullYear(), firstAllowedDate.getMonth(), 1);
@@ -663,8 +695,99 @@
             const endInput = document.getElementById('form-end-date');
             const startText = document.getElementById('form-start-date-thai');
             const endText = document.getElementById('form-end-date-thai');
+            const startButton = document.getElementById('btn-form-start-date');
+            const endButton = document.getElementById('btn-form-end-date');
+            if (startButton) startButton.innerText = startInput.value ? formatDisplayDate(startInput.value) : 'เลือกวันที่';
+            if (endButton) endButton.innerText = endInput.value ? formatDisplayDate(endInput.value) : 'เลือกวันที่';
             if (startText) startText.innerText = startInput.value ? `วันที่เลือก: ${formatDisplayDate(startInput.value)}` : '';
             if (endText) endText.innerText = endInput.value ? `วันที่เลือก: ${formatDisplayDate(endInput.value)}` : '';
+        }
+
+        function openThaiDatePicker(field) {
+            activeDatePickerField = field;
+            const input = document.getElementById(field === 'start' ? 'form-start-date' : 'form-end-date');
+            const fallbackDate = input.value || document.getElementById('form-start-date').value || formatDateInput(getFirstAllowedUserDate());
+            const selectedDate = new Date(`${fallbackDate}T00:00:00`);
+            activeDatePickerMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+            renderThaiDatePicker();
+            document.getElementById('thai-date-picker-modal').classList.remove('hidden');
+        }
+
+        function closeThaiDatePicker() {
+            activeDatePickerField = null;
+            document.getElementById('thai-date-picker-modal').classList.add('hidden');
+        }
+
+        function changeThaiDatePickerMonth(delta) {
+            if (!activeDatePickerMonth) return;
+            activeDatePickerMonth = new Date(activeDatePickerMonth.getFullYear(), activeDatePickerMonth.getMonth() + delta, 1);
+            renderThaiDatePicker();
+        }
+
+        function selectThaiDate(dateStr) {
+            if (!activeDatePickerField) return;
+            const startInput = document.getElementById('form-start-date');
+            const endInput = document.getElementById('form-end-date');
+            if (activeDatePickerField === 'start') {
+                startInput.value = dateStr;
+                applyDateLimits();
+                if (!endInput.value || endInput.value < dateStr) {
+                    endInput.value = dateStr;
+                }
+            } else {
+                endInput.value = dateStr;
+            }
+            updateRequestDateDisplays();
+            closeThaiDatePicker();
+        }
+
+        function isThaiDateDisabled(dateStr) {
+            const input = document.getElementById(activeDatePickerField === 'start' ? 'form-start-date' : 'form-end-date');
+            return (input.min && dateStr < input.min) || (input.max && dateStr > input.max);
+        }
+
+        function renderThaiDatePicker() {
+            if (!activeDatePickerMonth) return;
+            const monthNames = [
+                'มกราคม',
+                'กุมภาพันธ์',
+                'มีนาคม',
+                'เมษายน',
+                'พฤษภาคม',
+                'มิถุนายน',
+                'กรกฎาคม',
+                'สิงหาคม',
+                'กันยายน',
+                'ตุลาคม',
+                'พฤศจิกายน',
+                'ธันวาคม'
+            ];
+            const year = activeDatePickerMonth.getFullYear();
+            const month = activeDatePickerMonth.getMonth();
+            const selectedValue = document.getElementById(activeDatePickerField === 'start' ? 'form-start-date' : 'form-end-date').value;
+            const todayValue = formatDateInput(requestToday);
+            const firstDay = new Date(year, month, 1).getDay();
+            const totalDays = new Date(year, month + 1, 0).getDate();
+            const days = [
+                ...Array.from({ length: firstDay }, () => '<div></div>'),
+                ...Array.from({ length: totalDays }, (_, index) => {
+                    const day = index + 1;
+                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const disabled = isThaiDateDisabled(dateStr);
+                    const isSelected = dateStr === selectedValue;
+                    const isToday = dateStr === todayValue;
+                    const classes = disabled
+                        ? 'cursor-not-allowed text-gray-300'
+                        : isSelected
+                            ? 'bg-teal-600 text-white border-teal-700'
+                            : isToday
+                                ? 'border-teal-300 bg-teal-50 text-teal-800 hover:bg-teal-100'
+                                : 'border-transparent text-gray-700 hover:bg-teal-50';
+                    return `<button type="button" ${disabled ? 'disabled' : `onclick="selectThaiDate('${dateStr}')"`} class="h-9 rounded-lg border text-sm font-semibold ${classes}">${day}</button>`;
+                })
+            ];
+            document.getElementById('thai-date-picker-title').innerText = `${monthNames[month]} ${year + 543}`;
+            document.getElementById('thai-date-picker-days').innerHTML = days.join('');
         }
 
         function applyDateLimits() {
@@ -679,7 +802,7 @@
             }
 
             const minDate = formatDateInput(getFirstAllowedUserDate());
-            const maxDate = formatDateInput(addMonths(requestToday, 6));
+            const maxDate = formatDateInput(getLastAllowedUserDate());
             startInput.min = minDate;
             startInput.max = maxDate;
             endInput.min = startInput.value || minDate;
@@ -876,6 +999,25 @@
             });
             document.getElementById('admin-add-type').addEventListener('change', renderAdminAddPanel);
             document.getElementById('admin-position-filter').addEventListener('change', renderAdminTable);
+            document.getElementById('btn-form-start-date').addEventListener('click', () => {
+                openThaiDatePicker('start');
+            });
+            document.getElementById('btn-form-end-date').addEventListener('click', () => {
+                openThaiDatePicker('end');
+            });
+            document.getElementById('btn-thai-date-prev').addEventListener('click', () => {
+                changeThaiDatePickerMonth(-1);
+            });
+            document.getElementById('btn-thai-date-next').addEventListener('click', () => {
+                changeThaiDatePickerMonth(1);
+            });
+            document.getElementById('btn-thai-date-close').addEventListener('click', closeThaiDatePicker);
+            document.getElementById('btn-thai-date-today').addEventListener('click', () => {
+                const todayValue = formatDateInput(requestToday);
+                if (!isThaiDateDisabled(todayValue)) {
+                    selectThaiDate(todayValue);
+                }
+            });
             document.getElementById('form-start-date').addEventListener('change', () => {
                 const startDate = document.getElementById('form-start-date').value;
                 const endDateInput = document.getElementById('form-end-date');
@@ -1425,7 +1567,7 @@
                     request.userId === cancelRequest.userId
                     || (cancelName && normalizeName(request.name) === cancelName)
                 )
-                && getRequestDates(request).some((date) => cancelDates.includes(date))
+                && getRequestDates(request).every((date) => cancelDates.includes(date))
             ));
         }
 
@@ -1451,7 +1593,17 @@
                     dates: requestedDates
                 };
                 if (!getApprovedRequestsForCancel(cancelDraft).length) {
-                    alert('ไม่พบเวรเดิมที่อนุมัติแล้วในช่วงวันที่เลือก กรุณาตรวจสอบวันที่ก่อนส่งคำขอยกเลิก');
+                    alert('ไม่พบเวรเดิมที่อนุมัติแล้วและอยู่ครบในช่วงวันที่เลือก กรุณาเลือกวันที่ให้ครอบคลุมคำขอเดิมก่อนส่งคำขอยกเลิก');
+                    return;
+                }
+                const duplicateCancel = shiftRequests.some((request) => (
+                    request.userId === user.id
+                    && request.leaveType === 'ยกเลิก'
+                    && request.status === 'Pending'
+                    && getRequestDates(request).some((date) => requestedDates.includes(date))
+                ));
+                if (duplicateCancel) {
+                    alert('มีคำขอยกเลิกช่วงวันที่เลือกที่รอ Admin ยืนยันอยู่แล้ว');
                     return;
                 }
 
@@ -1516,10 +1668,10 @@
             }
 
             if (currentRole !== 'admin') {
-                const maxRequestDate = addMonths(requestToday, 6);
+                const maxRequestDate = getLastAllowedUserDate();
                 const overLimitDate = requestedDates.find((date) => new Date(`${date}T00:00:00`) > maxRequestDate);
                 if (overLimitDate) {
-                    alert(`ขอเวรได้ไม่เกิน 6 เดือนล่วงหน้า (วันสุดท้ายที่ขอได้คือ ${formatThaiDate(maxRequestDate)})`);
+                    alert(`ขอเวรได้ไม่เกิน 6 เดือนนับจากเดือนแรกที่สามารถขอเวรได้ (วันสุดท้ายที่ขอได้คือ ${formatThaiDate(maxRequestDate)})`);
                     return;
                 }
 
@@ -2770,11 +2922,16 @@
                                                         ${dayRequests.map((request) => {
                                                             const symbol = getMonthlyLeaveSymbol(request.leaveType);
                                                             if (!symbol) return '';
+                                                            const statusLabel = request.leaveType === 'ยกเลิก' && request.status === 'Pending'
+                                                                ? 'รอยืนยันยกเลิก'
+                                                                : request.status === 'Pending'
+                                                                    ? 'รออนุมัติ'
+                                                                    : 'ได้สิทธิ์';
                                                             return `
                                                                 <button type="button"
                                                                     onclick="openMonthlyRequestAction(${JSON.stringify(request.id)})"
                                             class="min-w-5 rounded border px-1 text-[11px] font-bold leading-5 ${getMonthlySymbolClass(request.status, request.leaveType)}"
-                                                                    title="${`${request.name || user.name}\n${formatSingleHeatmapDate(date)}\n${request.leaveType || '-'} • ${request.status === 'Pending' ? 'รออนุมัติ' : 'ได้สิทธิ์'}`.replace(/"/g, '&quot;')}">
+                                                                    title="${`${request.name || user.name}\n${formatSingleHeatmapDate(date)}\n${request.leaveType || '-'} • ${statusLabel}`.replace(/"/g, '&quot;')}">
                                                                     ${symbol}
                                                                 </button>
                                                             `;
@@ -2790,7 +2947,7 @@
                     </table>
                     </div>
                     <div class="border-t border-gray-100 p-3 text-xs text-gray-500">
-                        สัญลักษณ์: Off = X, Vac = V, ยกเลิก = C, ลากิจ = ก, ลาป่วย = ป, ลาคลอด = ค • สีเขียวเข้ม = ได้สิทธิ์, สีเหลือง = รออนุมัติ
+                        สัญลักษณ์: Off = X, Vac = V, ยกเลิก = C, ลากิจ = ก, ลาป่วย = ป, ลาคลอด = ค • สีเขียวเข้ม = ได้สิทธิ์, สีเหลือง = รออนุมัติ, สีแดง = รอยืนยันยกเลิก
                     </div>
                 `
                 : '<div class="p-4 text-sm text-gray-500">ยังไม่มีรายชื่อเจ้าหน้าที่ในเงื่อนไขนี้</div>';
