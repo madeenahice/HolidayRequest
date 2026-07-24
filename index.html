@@ -105,6 +105,7 @@
         #reserve-modal > div,
         #promote-modal > div,
         #day-detail-modal > div,
+        #monthly-action-modal > div,
         #admin-password-modal > div {
             background: rgba(255, 253, 247, 0.96) !important;
             border-color: var(--palette-line) !important;
@@ -146,8 +147,6 @@
 
         #btn-prev-month,
         #btn-next-month,
-        #btn-back-calendar,
-        #btn-back-calendar-from-heatmap,
         #reserve-modal #btn-reserve-cancel,
         #promote-modal #btn-promote-skip,
         #admin-password-modal #btn-admin-password-cancel {
@@ -157,8 +156,6 @@
 
         #btn-prev-month:hover,
         #btn-next-month:hover,
-        #btn-back-calendar:hover,
-        #btn-back-calendar-from-heatmap:hover,
         #reserve-modal #btn-reserve-cancel:hover,
         #promote-modal #btn-promote-skip:hover,
         #admin-password-modal #btn-admin-password-cancel:hover {
@@ -206,7 +203,30 @@
 
     <main class="container mx-auto p-3 md:p-6 grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6">
         
-        <div class="space-y-6">
+        <div id="admin-section" class="bg-white p-4 md:p-6 rounded-2xl shadow-sm border-2 border-amber-400 hidden xl:col-span-3">
+            <h2 class="text-lg font-bold text-amber-600 mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-users-gear"></i> Admin
+            </h2>
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+                <button id="btn-admin-calendar" class="bg-sky-600 hover:bg-sky-700 text-white px-4 py-3 rounded-lg text-sm font-semibold transition text-left">
+                    <i class="fa-solid fa-calendar-days mr-2"></i> Calendar
+                </button>
+                <button id="btn-admin-heatmap" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-3 rounded-lg text-sm font-semibold transition text-left">
+                    <i class="fa-solid fa-chart-simple mr-2"></i> Heatmap
+                </button>
+                <button id="btn-admin-pending" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-3 rounded-lg text-sm font-semibold transition text-left">
+                    <i class="fa-solid fa-list-check mr-2"></i> Pending
+                </button>
+                <button id="btn-admin-cancel" class="bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg text-sm font-semibold transition text-left">
+                    <i class="fa-solid fa-ban mr-2"></i> Cancel
+                </button>
+                <button id="btn-admin-settings" class="bg-rose-500 hover:bg-rose-600 text-white px-4 py-3 rounded-lg text-sm font-semibold transition text-left">
+                    <i class="fa-solid fa-users-gear mr-2"></i> Manage staff
+                </button>
+            </div>
+        </div>
+
+        <div id="request-panel" class="space-y-6">
             
             <div id="user-info-box" class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-xl shadow-sm">
                 <h3 class="font-bold text-blue-800 mb-1"><i class="fa-solid fa-circle-info mr-1"></i> กฎการขอเวร</h3>
@@ -254,32 +274,6 @@
                     </button>
                 </form>
             </div>
-
-            <div id="admin-section" class="bg-white p-4 md:p-6 rounded-2xl shadow-sm border-2 border-amber-400 hidden space-y-6">
-                <div>
-                    <div class="flex items-center justify-between gap-3 mb-3">
-                        <h2 class="text-lg font-bold text-amber-600 flex items-center gap-2">
-                            <i class="fa-solid fa-users-gear"></i> [Admin] จัดการเจ้าหน้าที่ หน่วยงาน & Level
-                        </h2>
-                        <div class="flex flex-wrap justify-end gap-2">
-                            <button id="btn-admin-heatmap" class="bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition">
-                                <i class="fa-solid fa-chart-simple mr-1"></i> Heatmap
-                            </button>
-                            <button id="btn-admin-settings" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition">
-                                <i class="fa-solid fa-gear mr-1"></i> จัดการเจ้าหน้าที่
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div>
-                    <h3 class="text-md font-bold text-amber-700 mb-3 flex items-center gap-2">
-                        <i class="fa-solid fa-list-check"></i> [Admin] รายการตัวสำรอง / รอพิจารณา
-                    </h3>
-                    <div id="admin-reserve-queue" class="space-y-2"></div>
-                </div>
-            </div>
-
         </div>
 
         <div id="calendar-view" class="xl:col-span-2 bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col min-w-0">
@@ -301,14 +295,29 @@
             </div>
         </div>
 
+        <div id="admin-pending-view" class="xl:col-span-2 bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-amber-200 hidden min-w-0">
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
+                <h2 class="text-lg md:text-xl font-bold text-amber-700 flex items-center gap-2">
+                    <i class="fa-solid fa-list-check"></i> Pending
+                </h2>
+            </div>
+            <div id="admin-reserve-queue" class="space-y-2"></div>
+        </div>
+
+        <div id="admin-cancel-view" class="xl:col-span-2 bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-red-200 hidden min-w-0">
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
+                <h2 class="text-lg md:text-xl font-bold text-red-700 flex items-center gap-2">
+                    <i class="fa-solid fa-ban"></i> Cancel
+                </h2>
+            </div>
+            <div id="admin-cancel-queue" class="space-y-2"></div>
+        </div>
+
         <div id="admin-management-view" class="xl:col-span-2 bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-amber-200 hidden min-w-0">
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
                 <h2 class="text-lg md:text-xl font-bold text-amber-700 flex items-center gap-2">
-                    <i class="fa-solid fa-users-gear"></i> จัดการเจ้าหน้าที่
+                    <i class="fa-solid fa-users-gear"></i> Manage staff
                 </h2>
-                <button id="btn-back-calendar" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-semibold transition">
-                    <i class="fa-solid fa-calendar-days mr-1"></i> กลับไปปฏิทิน
-                </button>
             </div>
 
             <div class="mb-3 grid grid-cols-1 gap-2 rounded-xl border border-amber-100 bg-amber-50/60 p-3 sm:grid-cols-[1fr_auto] sm:items-end">
@@ -397,11 +406,8 @@
         <div id="admin-heatmap-view" class="xl:col-span-2 bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-teal-200 hidden min-w-0">
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
                 <h2 class="text-lg md:text-xl font-bold text-teal-700 flex items-center gap-2">
-                    <i class="fa-solid fa-chart-simple"></i> สถิติการขอเวร
+                    <i class="fa-solid fa-chart-simple"></i> Heatmap
                 </h2>
-                <button id="btn-back-calendar-from-heatmap" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-semibold transition">
-                    <i class="fa-solid fa-calendar-days mr-1"></i> กลับไปปฏิทิน
-                </button>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
@@ -430,8 +436,14 @@
                     <div id="heatmap-yearly" class="overflow-x-auto rounded-xl border border-gray-100"></div>
                 </section>
                 <section>
-                    <h3 class="font-bold text-gray-700 mb-2">สรุปประเภทการลา (เฉพาะอนุมัติแล้ว)</h3>
-                    <div id="heatmap-leave-summary" class="rounded-xl border border-gray-100"></div>
+                    <div class="mb-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                        <h3 id="heatmap-monthly-title" class="font-bold text-gray-700">ตารางสรุปรายเดือน</h3>
+                        <label class="text-xs font-semibold text-gray-600 sm:w-56">
+                            เดือน
+                            <select id="heatmap-month" class="mt-1 w-full p-2 text-sm bg-white border border-teal-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500"></select>
+                        </label>
+                    </div>
+                    <div id="heatmap-monthly-summary" class="rounded-xl border border-gray-100"></div>
                 </section>
             </div>
         </div>
@@ -482,6 +494,26 @@
         </div>
     </div>
 
+    <div id="monthly-action-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <h3 class="text-lg font-bold text-gray-800">จัดการรายการ</h3>
+                <button id="btn-monthly-action-close" class="text-gray-400 hover:text-gray-700 text-xl leading-none">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="monthly-action-detail" class="rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700"></div>
+            <div class="mt-4 grid grid-cols-2 gap-2">
+                <button id="btn-monthly-action-edit" class="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                    <i class="fa-solid fa-pen-to-square mr-1"></i> แก้ไข
+                </button>
+                <button id="btn-monthly-action-delete" class="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700">
+                    <i class="fa-solid fa-trash-can mr-1"></i> ยกเลิก
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="admin-password-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl">
             <h3 class="text-lg font-bold text-gray-800 mb-3">เข้าสู่ระบบ Admin</h3>
@@ -508,11 +540,12 @@
         let currentDate = new Date(requestToday.getFullYear(), requestToday.getMonth(), 1);
         let pendingReserveData = null;
         let pendingPromoteData = null;
+        let selectedMonthlyRequestId = null;
         let heatmapDetailCache = {};
         const heatmapPageSizeOptions = [10, 15, 20, 25];
         const heatmapPagination = {
             yearly: { page: 1, pageSize: 10 },
-            leave: { page: 1, pageSize: 10 }
+            monthly: { page: 1, pageSize: 15 }
         };
         let realtimeTimerId = null;
         let realtimeRefreshTimerId = null;
@@ -530,7 +563,7 @@
             'อุบัติเหตุและฉุกเฉิน': 'ER',
             'รับ-ส่งต่อ': 'Refer'
         };
-        const leaveTypes = ['Vac', 'Off', 'ลากิจ', 'อบรม', 'ลาป่วย', 'ลาคลอด', 'ลาบวช'];
+        const leaveTypes = ['Vac', 'Off', 'ยกเลิก', 'ลากิจ', 'อบรม', 'ลาป่วย', 'ลาคลอด', 'ลาบวช'];
         const longLeaveTypes = ['ลาคลอด', 'ลาป่วย', 'ลาบวช'];
         const publicHolidays = {
             '2026-10-13': 'วันคล้ายวันสวรรคต ร.9',
@@ -598,6 +631,18 @@
             currentDate = new Date(firstAllowedDate.getFullYear(), firstAllowedDate.getMonth(), 1);
         }
 
+        function setDefaultRequestDates(force = false) {
+            const startInput = document.getElementById('form-start-date');
+            const endInput = document.getElementById('form-end-date');
+            const defaultDate = formatDateInput(getFirstAllowedUserDate());
+            if (force || !startInput.value) {
+                startInput.value = defaultDate;
+            }
+            if (force || !endInput.value || endInput.value < startInput.value) {
+                endInput.value = startInput.value;
+            }
+        }
+
         function applyDateLimits() {
             const startInput = document.getElementById('form-start-date');
             const endInput = document.getElementById('form-end-date');
@@ -619,6 +664,7 @@
 
         function initInputs() {
             showFirstAllowedUserMonth();
+            setDefaultRequestDates();
             applyDateLimits();
         }
 
@@ -633,8 +679,12 @@
                 : '<i class="fa-solid fa-user-gear mr-1"></i> สลับเป็น Admin';
 
             document.getElementById('admin-section').classList.toggle('hidden', currentRole !== 'admin');
+            document.getElementById('request-panel').classList.toggle('hidden', currentRole === 'admin');
             if (currentRole !== 'admin') {
+                document.getElementById('request-panel').classList.remove('hidden');
                 showCalendarView();
+            } else {
+                showAdminHeatmapView();
             }
             applyDateLimits();
             if (currentRole === 'user') {
@@ -645,27 +695,85 @@
         }
 
         function showCalendarView() {
+            document.getElementById('request-panel').classList.remove('hidden');
+            document.getElementById('user-info-box').classList.remove('hidden');
+            document.getElementById('form-section').classList.remove('hidden');
+            setDefaultRequestDates(currentRole === 'admin');
+            applyDateLimits();
             document.getElementById('calendar-view').classList.remove('hidden');
             document.getElementById('calendar-view').classList.add('flex');
+            document.getElementById('calendar-view').classList.remove('xl:col-span-3');
             document.getElementById('admin-management-view').classList.add('hidden');
+            document.getElementById('admin-management-view').classList.remove('xl:col-span-3');
             document.getElementById('admin-heatmap-view').classList.add('hidden');
+            document.getElementById('admin-heatmap-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-pending-view').classList.add('hidden');
+            document.getElementById('admin-pending-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-cancel-view').classList.add('hidden');
+            document.getElementById('admin-cancel-view').classList.remove('xl:col-span-3');
+            showFirstAllowedUserMonth();
+            renderCalendar();
         }
 
         function showAdminManagementView() {
+            document.getElementById('request-panel').classList.add('hidden');
             document.getElementById('calendar-view').classList.add('hidden');
             document.getElementById('calendar-view').classList.remove('flex');
             document.getElementById('admin-management-view').classList.remove('hidden');
+            document.getElementById('admin-management-view').classList.add('xl:col-span-3');
             document.getElementById('admin-heatmap-view').classList.add('hidden');
+            document.getElementById('admin-heatmap-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-pending-view').classList.add('hidden');
+            document.getElementById('admin-pending-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-cancel-view').classList.add('hidden');
+            document.getElementById('admin-cancel-view').classList.remove('xl:col-span-3');
             renderAdminSettings();
             renderAdminTable();
         }
 
         function showAdminHeatmapView() {
+            document.getElementById('request-panel').classList.add('hidden');
             document.getElementById('calendar-view').classList.add('hidden');
             document.getElementById('calendar-view').classList.remove('flex');
             document.getElementById('admin-management-view').classList.add('hidden');
+            document.getElementById('admin-management-view').classList.remove('xl:col-span-3');
             document.getElementById('admin-heatmap-view').classList.remove('hidden');
+            document.getElementById('admin-heatmap-view').classList.add('xl:col-span-3');
+            document.getElementById('admin-pending-view').classList.add('hidden');
+            document.getElementById('admin-pending-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-cancel-view').classList.add('hidden');
+            document.getElementById('admin-cancel-view').classList.remove('xl:col-span-3');
             renderAdminHeatmap();
+        }
+
+        function showAdminPendingView() {
+            document.getElementById('request-panel').classList.add('hidden');
+            document.getElementById('calendar-view').classList.add('hidden');
+            document.getElementById('calendar-view').classList.remove('flex');
+            document.getElementById('admin-management-view').classList.add('hidden');
+            document.getElementById('admin-management-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-heatmap-view').classList.add('hidden');
+            document.getElementById('admin-heatmap-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-pending-view').classList.remove('hidden');
+            document.getElementById('admin-pending-view').classList.add('xl:col-span-3');
+            document.getElementById('admin-cancel-view').classList.add('hidden');
+            document.getElementById('admin-cancel-view').classList.remove('xl:col-span-3');
+            renderAdminReserveQueue();
+        }
+
+        function showAdminCancelView() {
+            document.getElementById('request-panel').classList.add('hidden');
+            document.getElementById('calendar-view').classList.add('hidden');
+            document.getElementById('calendar-view').classList.remove('flex');
+            document.getElementById('admin-management-view').classList.add('hidden');
+            document.getElementById('admin-management-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-heatmap-view').classList.add('hidden');
+            document.getElementById('admin-heatmap-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-pending-view').classList.add('hidden');
+            document.getElementById('admin-pending-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-cancel-view').classList.remove('hidden');
+            document.getElementById('admin-cancel-view').classList.add('xl:col-span-3');
+            renderAdminCancelQueue();
         }
 
         function setupEventListeners() {
@@ -707,21 +815,24 @@
                 renderUserDropdowns();
                 renderCalendar();
             });
+            document.getElementById('btn-admin-calendar').addEventListener('click', () => {
+                showCalendarView();
+            });
             document.getElementById('btn-admin-settings').addEventListener('click', () => {
                 showAdminManagementView();
             });
             document.getElementById('btn-admin-heatmap').addEventListener('click', () => {
                 showAdminHeatmapView();
             });
-            document.getElementById('btn-back-calendar').addEventListener('click', () => {
-                showCalendarView();
+            document.getElementById('btn-admin-pending').addEventListener('click', () => {
+                showAdminPendingView();
             });
-            document.getElementById('btn-back-calendar-from-heatmap').addEventListener('click', () => {
-                showCalendarView();
+            document.getElementById('btn-admin-cancel').addEventListener('click', () => {
+                showAdminCancelView();
             });
             document.getElementById('heatmap-fiscal-year').addEventListener('change', () => {
                 resetHeatmapPagination();
-                renderAdminHeatmap(false);
+                renderAdminHeatmap(false, true);
             });
             document.getElementById('heatmap-department').addEventListener('change', () => {
                 resetHeatmapPagination();
@@ -729,6 +840,10 @@
             });
             document.getElementById('heatmap-position').addEventListener('change', () => {
                 resetHeatmapPagination();
+                renderAdminHeatmap(false);
+            });
+            document.getElementById('heatmap-month').addEventListener('change', () => {
+                heatmapPagination.monthly.page = 1;
                 renderAdminHeatmap(false);
             });
             document.getElementById('btn-show-add-panel').addEventListener('click', () => {
@@ -758,6 +873,21 @@
             document.getElementById('btn-promote-confirm').addEventListener('click', executePromote);
             document.getElementById('btn-day-detail-close').addEventListener('click', () => {
                 document.getElementById('day-detail-modal').classList.add('hidden');
+            });
+            document.getElementById('btn-monthly-action-close').addEventListener('click', closeMonthlyActionModal);
+            document.getElementById('btn-monthly-action-edit').addEventListener('click', () => {
+                if (selectedMonthlyRequestId === null) return;
+                const requestId = selectedMonthlyRequestId;
+                closeMonthlyActionModal();
+                editShiftDates(requestId);
+                renderAdminHeatmap(false);
+            });
+            document.getElementById('btn-monthly-action-delete').addEventListener('click', () => {
+                if (selectedMonthlyRequestId === null) return;
+                const requestId = selectedMonthlyRequestId;
+                closeMonthlyActionModal();
+                deleteShift(requestId);
+                renderAdminHeatmap(false);
             });
         }
 
@@ -1144,6 +1274,9 @@
         }
 
         function getRequestColorStyle(request) {
+            if (request.leaveType === 'ยกเลิก' && request.status === 'Pending') {
+                return { bg: 'bg-red-50 text-red-700 border-red-300', dot: 'bg-red-500' };
+            }
             return getLevelColorStyle(request.level);
         }
 
@@ -1195,7 +1328,12 @@
 
         function getRequestTooltip(request) {
             const trainingText = request.trainingNote ? ` | หมายเหตุ: ${request.trainingNote}` : '';
-            return `${request.name || 'ผู้ใช้'} | ${request.department} | ${request.position} | ${request.level} | ${request.leaveType || '-'}${trainingText} | ${getRequestDateText(request)} | ${request.status === 'Pending' ? 'ตัวสำรอง' : 'อนุมัติ'}`;
+            const statusText = request.leaveType === 'ยกเลิก' && request.status === 'Pending'
+                ? 'รอยืนยันยกเลิก'
+                : request.status === 'Pending'
+                    ? 'ตัวสำรอง'
+                    : 'อนุมัติ';
+            return `${request.name || 'ผู้ใช้'} | ${request.department} | ${request.position} | ${request.level} | ${request.leaveType || '-'}${trainingText} | ${getRequestDateText(request)} | ${statusText}`;
         }
 
         function openDayDetail(dateStr, requests) {
@@ -1248,6 +1386,21 @@
             )).length;
         }
 
+        function getApprovedRequestsForCancel(cancelRequest) {
+            const cancelDates = getRequestDates(cancelRequest);
+            const cancelName = normalizeName(cancelRequest.name);
+            return shiftRequests.filter((request) => (
+                request.id !== cancelRequest.id
+                && request.status === 'Approved'
+                && request.leaveType !== 'ยกเลิก'
+                && (
+                    request.userId === cancelRequest.userId
+                    || (cancelName && normalizeName(request.name) === cancelName)
+                )
+                && getRequestDates(request).some((date) => cancelDates.includes(date))
+            ));
+        }
+
         function handleShiftRequest() {
             const userId = Number(document.getElementById('form-user-select').value);
             const startDate = document.getElementById('form-start-date').value;
@@ -1262,6 +1415,47 @@
             }
 
             const requestedDates = getDateRange(startDate, endDate);
+            if (leaveType === 'ยกเลิก') {
+                const cancelDraft = {
+                    id: 0,
+                    userId: user.id,
+                    name: user.name,
+                    dates: requestedDates
+                };
+                if (!getApprovedRequestsForCancel(cancelDraft).length) {
+                    alert('ไม่พบเวรเดิมที่อนุมัติแล้วในช่วงวันที่เลือก กรุณาตรวจสอบวันที่ก่อนส่งคำขอยกเลิก');
+                    return;
+                }
+
+                const cancelReason = prompt('ระบุเหตุผลการยกเลิก');
+                if (!cancelReason || !cancelReason.trim()) {
+                    alert('กรุณาระบุเหตุผลการยกเลิก');
+                    return;
+                }
+
+                const newRequest = {
+                    id: Date.now(),
+                    userId: user.id,
+                    startDate,
+                    endDate,
+                    dates: requestedDates,
+                    department: user.department,
+                    position: user.position,
+                    level: user.level,
+                    leaveType,
+                    trainingNote: cancelReason.trim(),
+                    status: 'Pending',
+                    timestamp: new Date()
+                };
+                shiftRequests.push(newRequest);
+                logAction('CREATE_PENDING_REQUEST', getRequestLogDetail(newRequest));
+                alert('ส่งคำขอยกเลิกให้ Admin ยืนยันแล้ว');
+                showCalendarMonth(startDate);
+                renderCalendar();
+                renderAdminReserveQueue();
+                return;
+            }
+
             if (!canRequestMoreThanNineDays(leaveType) && (requestedDates.length > 9 || getMaxConsecutiveRequestDays(user.id, requestedDates) > 9)) {
                 alert('คุณขอเวรติดต่อกันเกิน 9 วัน');
                 return;
@@ -1387,6 +1581,10 @@
         function approveReserveRequest(requestId) {
             const target = shiftRequests.find((request) => request.id === requestId);
             if (!target) return;
+            if (target.leaveType === 'ยกเลิก') {
+                approveCancelRequest(target);
+                return;
+            }
             const quotaLimit = getQuotaLimit(target.level);
             const canApproveAllDates = getRequestDates(target).every((date) => getApprovedCount(date, target.department, target.position, target.level) < quotaLimit);
             if (!canApproveAllDates) {
@@ -1400,6 +1598,30 @@
             renderAdminReserveQueue();
         }
 
+        function approveCancelRequest(cancelRequest) {
+            const matchedRequests = getApprovedRequestsForCancel(cancelRequest);
+
+            if (!matchedRequests.length) {
+                alert('ไม่พบรายการขอเวรเดิมที่ตรงกับคำขอยกเลิกนี้');
+                return;
+            }
+
+            matchedRequests.forEach((request) => {
+                logAction('DELETE_REQUEST', { ...getRequestLogDetail(request), status: 'cancle' });
+            });
+            logAction('DELETE_REQUEST', { ...getRequestLogDetail(cancelRequest), status: 'cancle' });
+            shiftRequests = shiftRequests.filter((request) => (
+                request.id !== cancelRequest.id
+                && !matchedRequests.some((matchedRequest) => matchedRequest.id === request.id)
+            ));
+            alert('ยืนยันคำขอยกเลิกเรียบร้อยแล้ว');
+            renderCalendar();
+            renderAdminReserveQueue();
+            if (!document.getElementById('admin-heatmap').classList.contains('hidden')) {
+                renderAdminHeatmap(false);
+            }
+        }
+
         function cancelShiftAndCheckQueue(requestId) {
             if (currentRole !== 'admin') {
                 alert('ผู้ใช้ทั่วไปไม่มีสิทธิ์ยกเลิกเวร กรุณาติดต่อแอดมิน');
@@ -1410,8 +1632,12 @@
             if (targetIndex === -1) return;
 
             const targetShift = shiftRequests[targetIndex];
-            if (!confirm(`ยืนยันลบคำขอเวรวันที่ ${getRequestDateText(targetShift)} หรือไม่?`)) return;
-            logAction('DELETE_REQUEST', { ...getRequestLogDetail(targetShift), status: 'Cancel' });
+            const isCancelRequest = targetShift.leaveType === 'ยกเลิก';
+            const confirmText = isCancelRequest
+                ? `ยืนยันลบคำขอยกเลิกวันที่ ${getRequestDateText(targetShift)} หรือไม่?`
+                : `ยืนยันลบคำขอเวรวันที่ ${getRequestDateText(targetShift)} หรือไม่?`;
+            if (!confirm(confirmText)) return;
+            logAction('DELETE_REQUEST', { ...getRequestLogDetail(targetShift), status: 'cancle' });
             shiftRequests.splice(targetIndex, 1);
 
             if (targetShift.status === 'Approved') {
@@ -1420,6 +1646,7 @@
                         request.level === targetShift.level
                         && request.position === targetShift.position
                         && request.status === 'Pending'
+                        && request.leaveType !== 'ยกเลิก'
                         && getRequestDates(request).some((date) => getRequestDates(targetShift).includes(date))
                     ))
                     .filter((request) => request.department === targetShift.department)
@@ -1435,7 +1662,7 @@
                     alert('ลบรายการสำเร็จแล้ว (ไม่มีตัวสำรองในคิว)');
                 }
             } else {
-                alert('ลบคิวสำรองออกเรียบร้อยแล้ว');
+                alert(isCancelRequest ? 'ลบคำขอยกเลิกออกเรียบร้อยแล้ว' : 'ลบคิวสำรองออกเรียบร้อยแล้ว');
             }
 
             renderCalendar();
@@ -2189,7 +2416,28 @@
             const monthNames = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
             const months = getFiscalMonths(fiscalYear);
             monthSelect.innerHTML = months.map((item) => `<option value="${item.key}">${monthNames[item.month]} ${formatShortThaiYear(item.year)}</option>`).join('');
-            monthSelect.value = months.some((item) => item.key === previousValue) ? previousValue : months[0].key;
+            const firstAllowedMonthKey = formatDateInput(getFirstAllowedUserDate()).slice(0, 7);
+            monthSelect.value = months.some((item) => item.key === previousValue)
+                ? previousValue
+                : (months.some((item) => item.key === firstAllowedMonthKey) ? firstAllowedMonthKey : months[0].key);
+        }
+
+        function getMonthlyLeaveSymbol(leaveType) {
+            const symbols = {
+                Off: 'X',
+                Vac: 'V',
+                'ลากิจ': 'ก',
+                'ลาป่วย': 'ป',
+                'ลาคลอด': 'ค',
+                'อบรม': 'อ',
+                'ลาบวช': 'บ',
+                'ยกเลิก': 'C'
+            };
+            return symbols[leaveType] || '';
+        }
+
+        function getThaiWeekdayShort(dateStr) {
+            return ['อ', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'][new Date(`${dateStr}T00:00:00`).getDay()];
         }
 
         function getHeatmapClass(count, maxCount) {
@@ -2273,6 +2521,25 @@
             return ranges.join(', ');
         }
 
+        function formatSingleHeatmapDate(dateStr) {
+            const thaiMonths = [
+                'มกราคม',
+                'กุมภาพันธ์',
+                'มีนาคม',
+                'เมษายน',
+                'พฤษภาคม',
+                'มิถุนายน',
+                'กรกฎาคม',
+                'สิงหาคม',
+                'กันยายน',
+                'ตุลาคม',
+                'พฤศจิกายน',
+                'ธันวาคม'
+            ];
+            const date = new Date(`${dateStr}T00:00:00`);
+            return `${date.getDate()} ${thaiMonths[date.getMonth()]} ${date.getFullYear() + 543}`;
+        }
+
         function makeHeatmapCountButton(count, detailKey, detailText, activeClass = 'text-teal-700') {
             if (!count) {
                 return `<span class="text-gray-300"></span>`;
@@ -2287,6 +2554,45 @@
                 </button>
             `;
         }
+
+        function getMonthlySymbolClass(status, leaveType = '') {
+            if (leaveType === 'ยกเลิก' && status === 'Pending') {
+                return 'bg-red-100 text-red-800 border-red-300 hover:bg-red-200';
+            }
+            return status === 'Pending'
+                ? 'bg-yellow-100 text-yellow-800 border-yellow-300 hover:bg-yellow-200'
+                : 'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200';
+        }
+
+        function closeMonthlyActionModal() {
+            selectedMonthlyRequestId = null;
+            document.getElementById('monthly-action-modal').classList.add('hidden');
+        }
+
+        window.openMonthlyRequestAction = function(requestId) {
+            const request = shiftRequests.find((item) => item.id === requestId);
+            if (!request) {
+                alert('ไม่พบรายการคำขอเวรนี้ กรุณารีเฟรชข้อมูลอีกครั้ง');
+                return;
+            }
+
+            selectedMonthlyRequestId = request.id;
+            const user = findUserById(request.userId);
+            const statusText = request.leaveType === 'ยกเลิก' && request.status === 'Pending'
+                ? 'รอยืนยันยกเลิก'
+                : request.status === 'Pending'
+                    ? 'รออนุมัติ'
+                    : 'ได้สิทธิ์';
+            const noteText = request.trainingNote ? `<div class="mt-1 text-xs text-gray-500">หมายเหตุ: ${request.trainingNote}</div>` : '';
+            document.getElementById('monthly-action-detail').innerHTML = `
+                <div class="font-bold text-gray-800">${request.name || (user ? user.name : 'ผู้ใช้')}</div>
+                <div class="mt-1 text-xs text-gray-600">${request.department || '-'} • ${request.position || (user ? user.position : '-')} • ${request.level || '-'}</div>
+                <div class="mt-2 text-sm font-semibold text-gray-700">${request.leaveType || '-'} • ${getRequestDateText(request)}</div>
+                <div class="mt-1 text-xs text-gray-500">สถานะ: ${statusText}</div>
+                ${noteText}
+            `;
+            document.getElementById('monthly-action-modal').classList.remove('hidden');
+        };
 
         function makeUserHeatmapRow(user, counts, keys, maxCount, details = {}) {
             const total = keys.reduce((sum, key) => sum + (counts[key] || 0), 0);
@@ -2310,7 +2616,7 @@
 
         function resetHeatmapPagination() {
             heatmapPagination.yearly.page = 1;
-            heatmapPagination.leave.page = 1;
+            heatmapPagination.monthly.page = 1;
         }
 
         function getHeatmapPagination(kind, totalItems) {
@@ -2371,18 +2677,113 @@
             renderAdminHeatmap(false);
         };
 
-        function renderAdminHeatmap(resetOptions = true) {
+        function renderHeatmapMonthlySummary(monthKey, filteredUsers, entries) {
+            const [yearText, monthText] = monthKey.split('-');
+            const year = Number(yearText);
+            const month = Number(monthText) - 1;
+            const totalDays = new Date(year, month + 1, 0).getDate();
+            const monthNames = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+            const days = Array.from({ length: totalDays }, (_, index) => {
+                const day = index + 1;
+                return {
+                    day,
+                    date: `${yearText}-${monthText}-${String(day).padStart(2, '0')}`
+                };
+            });
+            const monthlyEntries = entries.filter(({ date }) => date.slice(0, 7) === monthKey);
+            const entriesByUserAndDate = new Map();
+            monthlyEntries.forEach(({ request, date }) => {
+                const key = `${request.userId}|${date}`;
+                if (!entriesByUserAndDate.has(key)) entriesByUserAndDate.set(key, []);
+                entriesByUserAndDate.get(key).push(request);
+            });
+
+            const monthlyUsers = [...filteredUsers].sort((a, b) => (
+                getLevelOrder(b.level) - getLevelOrder(a.level)
+                || a.name.localeCompare(b.name, 'th')
+            ));
+            const monthlyPagination = getHeatmapPagination('monthly', monthlyUsers.length);
+            const monthlyPageUsers = monthlyUsers.slice(monthlyPagination.startIndex, monthlyPagination.endIndex);
+            document.getElementById('heatmap-monthly-title').innerText = `ตารางสรุปรายเดือน ${monthNames[month]} ${year + 543}`;
+
+            document.getElementById('heatmap-monthly-summary').innerHTML = monthlyUsers.length
+                ? `
+                    ${makeHeatmapPaginationControls('monthly', monthlyUsers.length)}
+                    <div class="overflow-x-auto">
+                    <table class="min-w-[980px] w-full border-collapse text-center text-xs">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-600">
+                                <th class="sticky left-0 z-20 min-w-[190px] border border-gray-200 bg-gray-50 p-2 text-left">ชื่อ-สกุล</th>
+                                ${days.map(({ day, date }) => `<th class="min-w-8 border border-gray-200 p-1 ${isWeekend(date) ? 'bg-green-50' : ''}">${day}</th>`).join('')}
+                            </tr>
+                            <tr class="bg-white text-[10px] text-gray-500">
+                                <th class="sticky left-0 z-20 border border-gray-200 bg-white p-1 text-left">Level</th>
+                                ${days.map(({ date }) => `<th class="border border-gray-200 p-1 ${isWeekend(date) ? 'bg-green-50' : ''}">${getThaiWeekdayShort(date)}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${monthlyPageUsers.map((user) => {
+                                const colorStyle = getLevelColorStyle(user.level);
+                                return `
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="sticky left-0 z-10 border border-gray-200 bg-white p-2 text-left text-xs font-semibold">
+                                            <div class="rounded-md border px-2 py-1 ${colorStyle.bg}">
+                                                ${user.name}
+                                                <div class="text-[10px] font-normal opacity-75">${user.level}</div>
+                                            </div>
+                                        </td>
+                                        ${days.map(({ date }) => {
+                                            const dayRequests = entriesByUserAndDate.get(`${user.id}|${date}`) || [];
+                                            const detail = dayRequests.map((request) => `${request.leaveType || '-'} ${request.status === 'Pending' ? '(รอ)' : ''}`).join(', ');
+                                            const title = detail ? `${user.name}\n${formatSingleHeatmapDate(date)}\n${detail}` : '';
+                                            return `
+                                                <td class="h-7 border border-gray-200 p-1 ${isWeekend(date) ? 'bg-green-50' : 'bg-white'}" title="${title.replace(/"/g, '&quot;')}">
+                                                    <div class="flex flex-wrap items-center justify-center gap-0.5">
+                                                        ${dayRequests.map((request) => {
+                                                            const symbol = getMonthlyLeaveSymbol(request.leaveType);
+                                                            if (!symbol) return '';
+                                                            return `
+                                                                <button type="button"
+                                                                    onclick="openMonthlyRequestAction(${JSON.stringify(request.id)})"
+                                            class="min-w-5 rounded border px-1 text-[11px] font-bold leading-5 ${getMonthlySymbolClass(request.status, request.leaveType)}"
+                                                                    title="${`${request.name || user.name}\n${formatSingleHeatmapDate(date)}\n${request.leaveType || '-'} • ${request.status === 'Pending' ? 'รออนุมัติ' : 'ได้สิทธิ์'}`.replace(/"/g, '&quot;')}">
+                                                                    ${symbol}
+                                                                </button>
+                                                            `;
+                                                        }).join('')}
+                                                    </div>
+                                                </td>
+                                            `;
+                                        }).join('')}
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                    </div>
+                    <div class="border-t border-gray-100 p-3 text-xs text-gray-500">
+                        สัญลักษณ์: Off = X, Vac = V, ยกเลิก = C, ลากิจ = ก, ลาป่วย = ป, ลาคลอด = ค • สีเขียวเข้ม = ได้สิทธิ์, สีเหลือง = รออนุมัติ
+                    </div>
+                `
+                : '<div class="p-4 text-sm text-gray-500">ยังไม่มีรายชื่อเจ้าหน้าที่ในเงื่อนไขนี้</div>';
+        }
+
+        function renderAdminHeatmap(resetOptions = true, resetMonth = false) {
             if (resetOptions) {
                 renderHeatmapFiscalYearOptions();
                 renderHeatmapDepartmentOptions();
                 renderHeatmapPositionOptions();
+                renderHeatmapMonthOptions();
                 resetHeatmapPagination();
+            } else if (resetMonth) {
+                renderHeatmapMonthOptions();
             }
             heatmapDetailCache = {};
 
             const fiscalYear = Number(document.getElementById('heatmap-fiscal-year').value);
             const selectedDepartment = document.getElementById('heatmap-department').value;
             const selectedPosition = document.getElementById('heatmap-position').value;
+            const selectedMonth = document.getElementById('heatmap-month').value;
             const fiscalMonths = getFiscalMonths(fiscalYear);
             const filteredUsers = users.filter((user) => (
                 (!selectedDepartment || user.department === selectedDepartment)
@@ -2489,61 +2890,20 @@
                 `
                 : '<div class="p-4 text-sm text-gray-500">ยังไม่มีข้อมูลคำขอเวรในปีงบนี้</div>';
 
-            const activeLeaveTypes = leaveTypes.filter((leaveType) => (leaveTypeCounts[leaveType] || 0) > 0);
-            const approvedLeaveStats = activeStats.filter((stats) => activeLeaveTypes.some((leaveType) => (stats.leaveCounts[leaveType] || 0) > 0));
-            const leavePagination = getHeatmapPagination('leave', approvedLeaveStats.length);
-            const leavePageStats = approvedLeaveStats.slice(leavePagination.startIndex, leavePagination.endIndex);
-            document.getElementById('heatmap-leave-summary').innerHTML = approvedLeaveStats.length && activeLeaveTypes.length
-                ? `
-                    ${makeHeatmapPaginationControls('leave', approvedLeaveStats.length)}
-                    <div class="overflow-x-auto">
-                    <table class="min-w-[720px] w-full text-left text-sm">
-                        <thead class="bg-gray-50 text-xs text-gray-500">
-                            <tr>
-                                <th class="sticky left-0 z-10 bg-gray-50 p-3">เจ้าหน้าที่</th>
-                                ${activeLeaveTypes.map((leaveType) => `<th class="p-3 text-center">${leaveType}</th>`).join('')}
-                                <th class="p-3 text-center">รวม</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${leavePageStats.map((stats) => `
-                                <tr class="border-t border-gray-100">
-                                    <td class="sticky left-0 z-10 bg-white p-3 text-xs font-semibold text-gray-700 min-w-[180px]">
-                                        ${stats.user.name}
-                                        <div class="text-[10px] font-normal text-gray-400">${stats.user.department} • ${stats.user.position} • ${stats.user.level}</div>
-                                    </td>
-                                    ${activeLeaveTypes.map((leaveType) => {
-                                        const count = stats.leaveCounts[leaveType] || 0;
-                                        const detailText = `${stats.user.name}\n${leaveType}: ${count} วัน\nวันที่: ${formatHeatmapDateList(stats.leaveDetails[leaveType] || [])}`;
-                                        const detailKey = `${stats.user.id}|leave|${leaveType}`;
-                                        return `<td class="p-3 text-center">${makeHeatmapCountButton(count, detailKey, detailText)}</td>`;
-                                    }).join('')}
-                                    <td class="p-3 text-center">
-                                        ${(() => {
-                                            const total = activeLeaveTypes.reduce((sum, leaveType) => sum + (stats.leaveCounts[leaveType] || 0), 0);
-                                            const totalDates = activeLeaveTypes.flatMap((leaveType) => stats.leaveDetails[leaveType] || []);
-                                            const detailText = `${stats.user.name}\nรวม: ${total} วัน\nวันที่: ${formatHeatmapDateList(totalDates)}`;
-                                            const detailKey = `${stats.user.id}|leave|total`;
-                                            return makeHeatmapCountButton(total, detailKey, detailText, 'text-gray-700');
-                                        })()}
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                    </div>
-                `
-                : '<div class="p-4 text-sm text-gray-500">ยังไม่มีข้อมูลประเภทการลาในปีงบนี้</div>';
+            renderHeatmapMonthlySummary(selectedMonth, filteredUsers, entries);
         }
 
         function renderAdminReserveQueue() {
             const container = document.getElementById('admin-reserve-queue');
+            if (document.getElementById('admin-cancel-queue')) {
+                renderAdminCancelQueue();
+            }
             const pending = shiftRequests
-                .filter((request) => request.status === 'Pending')
+                .filter((request) => request.status === 'Pending' && request.leaveType !== 'ยกเลิก')
                 .sort((a, b) => a.timestamp - b.timestamp);
 
             if (!pending.length) {
-                container.innerHTML = '<div class="rounded-xl border border-dashed border-gray-200 p-3 text-sm text-gray-500">ไม่มีคำขอที่เป็นตัวสำรองในระบบ</div>';
+                container.innerHTML = '<div class="rounded-xl border border-dashed border-gray-200 p-3 text-sm text-gray-500">ไม่มีคำขอตัวสำรองที่รอพิจารณาในระบบ</div>';
                 return;
             }
 
@@ -2563,6 +2923,39 @@
                         <div class="mt-3 flex flex-wrap justify-end gap-2">
                             <button onclick="editShiftDates(${request.id})" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">แก้ไขวัน</button>
                             <button onclick="deleteShift(${request.id})" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">ยกเลิก</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderAdminCancelQueue() {
+            const container = document.getElementById('admin-cancel-queue');
+            const pendingCancels = shiftRequests
+                .filter((request) => request.status === 'Pending' && request.leaveType === 'ยกเลิก')
+                .sort((a, b) => a.timestamp - b.timestamp);
+
+            if (!pendingCancels.length) {
+                container.innerHTML = '<div class="rounded-xl border border-dashed border-red-200 p-3 text-sm text-gray-500">ไม่มีคำขอยกเลิกที่รอพิจารณาในระบบ</div>';
+                return;
+            }
+
+            container.innerHTML = pendingCancels.map((request) => {
+                const user = findUserById(request.userId);
+                const displayName = request.name || (user ? user.name : 'ผู้ใช้');
+                const trainingText = request.trainingNote ? ` • เหตุผล: ${request.trainingNote}` : '';
+                return `
+                    <div class="rounded-xl border-2 border-red-400 bg-red-50 p-3 text-sm">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <div class="font-semibold text-red-800">${displayName}</div>
+                                <div class="text-xs text-red-700">วันที่ ${getRequestDateText(request)} • ${request.department} • ${request.position || (user ? user.position : '')} • ${request.leaveType || '-'}${trainingText} • Level ${request.level} • รอยืนยันยกเลิก</div>
+                            </div>
+                            <button onclick="approveReserveRequest(${request.id})" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Cancel</button>
+                        </div>
+                        <div class="mt-3 flex flex-wrap justify-end gap-2">
+                            <button onclick="editShiftDates(${request.id})" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">แก้ไขวัน</button>
+                            <button onclick="deleteShift(${request.id})" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">ลบคำขอ</button>
                         </div>
                     </div>
                 `;
