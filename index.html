@@ -208,7 +208,7 @@
             <h2 class="text-lg font-bold text-amber-600 mb-4 flex items-center gap-2">
                 <i class="fa-solid fa-users-gear"></i> Admin
             </h2>
-            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-6">
                 <button id="btn-admin-calendar" class="bg-sky-600 hover:bg-sky-700 text-white px-4 py-3 rounded-lg text-sm font-semibold transition text-left">
                     <i class="fa-solid fa-calendar-days mr-2"></i> Calendar
                 </button>
@@ -220,6 +220,9 @@
                 </button>
                 <button id="btn-admin-cancel" class="bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg text-sm font-semibold transition text-left">
                     <i class="fa-solid fa-ban mr-2"></i> Cancel
+                </button>
+                <button id="btn-admin-duty-roster" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg text-sm font-semibold transition text-left">
+                    <i class="fa-solid fa-table-list mr-2"></i> Duty Roster
                 </button>
                 <button id="btn-admin-settings" class="bg-rose-500 hover:bg-rose-600 text-white px-4 py-3 rounded-lg text-sm font-semibold transition text-left">
                     <i class="fa-solid fa-users-gear mr-2"></i> Manage staff
@@ -316,6 +319,18 @@
                 </h2>
             </div>
             <div id="admin-cancel-queue" class="space-y-2"></div>
+        </div>
+
+        <div id="admin-duty-roster-view" class="xl:col-span-2 bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-indigo-200 hidden min-w-0">
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
+                <h2 class="text-lg md:text-xl font-bold text-indigo-700 flex items-center gap-2">
+                    <i class="fa-solid fa-table-list"></i> Duty Roster
+                </h2>
+            </div>
+            <div class="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
+                <label class="block text-sm font-bold text-indigo-800 mb-2">Prompt สำหรับจัดตารางเวร</label>
+                <textarea id="duty-roster-prompt" rows="8" class="w-full rounded-xl border border-indigo-200 bg-white p-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="เตรียมไว้เขียน prompt จัดตารางเวร"></textarea>
+            </div>
         </div>
 
         <div id="admin-management-view" class="xl:col-span-2 bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-amber-200 hidden min-w-0">
@@ -858,6 +873,8 @@
             document.getElementById('admin-pending-view').classList.remove('xl:col-span-3');
             document.getElementById('admin-cancel-view').classList.add('hidden');
             document.getElementById('admin-cancel-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-duty-roster-view').classList.add('hidden');
+            document.getElementById('admin-duty-roster-view').classList.remove('xl:col-span-3');
             showFirstAllowedUserMonth();
             renderCalendar();
         }
@@ -874,6 +891,8 @@
             document.getElementById('admin-pending-view').classList.remove('xl:col-span-3');
             document.getElementById('admin-cancel-view').classList.add('hidden');
             document.getElementById('admin-cancel-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-duty-roster-view').classList.add('hidden');
+            document.getElementById('admin-duty-roster-view').classList.remove('xl:col-span-3');
             renderAdminSettings();
             renderAdminTable();
         }
@@ -890,6 +909,8 @@
             document.getElementById('admin-pending-view').classList.remove('xl:col-span-3');
             document.getElementById('admin-cancel-view').classList.add('hidden');
             document.getElementById('admin-cancel-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-duty-roster-view').classList.add('hidden');
+            document.getElementById('admin-duty-roster-view').classList.remove('xl:col-span-3');
             renderAdminHeatmap();
         }
 
@@ -905,6 +926,8 @@
             document.getElementById('admin-pending-view').classList.add('xl:col-span-3');
             document.getElementById('admin-cancel-view').classList.add('hidden');
             document.getElementById('admin-cancel-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-duty-roster-view').classList.add('hidden');
+            document.getElementById('admin-duty-roster-view').classList.remove('xl:col-span-3');
             renderAdminReserveQueue();
         }
 
@@ -920,7 +943,25 @@
             document.getElementById('admin-pending-view').classList.remove('xl:col-span-3');
             document.getElementById('admin-cancel-view').classList.remove('hidden');
             document.getElementById('admin-cancel-view').classList.add('xl:col-span-3');
+            document.getElementById('admin-duty-roster-view').classList.add('hidden');
+            document.getElementById('admin-duty-roster-view').classList.remove('xl:col-span-3');
             renderAdminCancelQueue();
+        }
+
+        function showAdminDutyRosterView() {
+            document.getElementById('request-panel').classList.add('hidden');
+            document.getElementById('calendar-view').classList.add('hidden');
+            document.getElementById('calendar-view').classList.remove('flex');
+            document.getElementById('admin-management-view').classList.add('hidden');
+            document.getElementById('admin-management-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-heatmap-view').classList.add('hidden');
+            document.getElementById('admin-heatmap-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-pending-view').classList.add('hidden');
+            document.getElementById('admin-pending-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-cancel-view').classList.add('hidden');
+            document.getElementById('admin-cancel-view').classList.remove('xl:col-span-3');
+            document.getElementById('admin-duty-roster-view').classList.remove('hidden');
+            document.getElementById('admin-duty-roster-view').classList.add('xl:col-span-3');
         }
 
         function setupEventListeners() {
@@ -976,6 +1017,9 @@
             });
             document.getElementById('btn-admin-cancel').addEventListener('click', () => {
                 showAdminCancelView();
+            });
+            document.getElementById('btn-admin-duty-roster').addEventListener('click', () => {
+                showAdminDutyRosterView();
             });
             document.getElementById('heatmap-fiscal-year').addEventListener('change', () => {
                 resetHeatmapPagination();
@@ -2878,10 +2922,7 @@
                 entriesByUserAndDate.get(key).push(request);
             });
 
-            const monthlyUsers = [...filteredUsers].sort((a, b) => (
-                getLevelOrder(b.level) - getLevelOrder(a.level)
-                || a.name.localeCompare(b.name, 'th')
-            ));
+            const monthlyUsers = [...filteredUsers];
             const monthlyPagination = getHeatmapPagination('monthly', monthlyUsers.length);
             const monthlyPageUsers = monthlyUsers.slice(monthlyPagination.startIndex, monthlyPagination.endIndex);
             document.getElementById('heatmap-monthly-title').innerText = `ตารางสรุปรายเดือน ${monthNames[month]} ${year + 543}`;
