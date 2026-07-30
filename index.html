@@ -2935,10 +2935,19 @@
             });
             const monthlyEntries = entries.filter(({ date }) => date.slice(0, 7) === monthKey);
             const entriesByUserAndDate = new Map();
-            monthlyEntries.forEach(({ request, date }) => {
-                const key = `${request.userId}|${date}`;
+            const addMonthlyEntry = (key, request) => {
                 if (!entriesByUserAndDate.has(key)) entriesByUserAndDate.set(key, []);
-                entriesByUserAndDate.get(key).push(request);
+                const list = entriesByUserAndDate.get(key);
+                if (!list.some((item) => item.id === request.id)) {
+                    list.push(request);
+                }
+            };
+            monthlyEntries.forEach(({ request, date }) => {
+                addMonthlyEntry(`${request.userId}|${date}`, request);
+                const requestName = normalizeName(request.name);
+                if (requestName) {
+                    addMonthlyEntry(`${requestName}|${date}`, request);
+                }
             });
 
             const monthlyUsers = [...filteredUsers];
@@ -2973,7 +2982,9 @@
                                             </div>
                                         </td>
                                         ${days.map(({ date }) => {
-                                            const dayRequests = entriesByUserAndDate.get(`${user.id}|${date}`) || [];
+                                            const dayRequests = entriesByUserAndDate.get(`${user.id}|${date}`)
+                                                || entriesByUserAndDate.get(`${normalizeName(user.name)}|${date}`)
+                                                || [];
                                             const detail = dayRequests.map((request) => `${request.leaveType || '-'} ${request.status === 'Pending' ? '(รอ)' : ''}`).join(', ');
                                             const title = detail ? `${user.name}\n${formatSingleHeatmapDate(date)}\n${detail}` : '';
                                             return `
