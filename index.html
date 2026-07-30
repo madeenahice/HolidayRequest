@@ -1105,12 +1105,62 @@
             });
         }
 
-        function findUserById(userId) {
-            return users.find((user) => user.id === userId);
-        }
-
         function normalizeName(value) {
             return String(value || '').replace(/\s+/g, '').trim();
+        }
+
+        function normalizeUserId(value) {
+            return String(value || '').trim();
+        }
+
+        function isSameUserId(firstId, secondId) {
+            return normalizeUserId(firstId) === normalizeUserId(secondId);
+        }
+
+        function hasDuplicateUserId(userId) {
+            return users.filter((user) => isSameUserId(user.id, userId)).length > 1;
+        }
+
+        function findUserById(userId, userName = '') {
+            const idMatches = users.filter((user) => isSameUserId(user.id, userId));
+            if (idMatches.length <= 1) return idMatches[0];
+            const normalizedName = normalizeName(userName);
+            return normalizedName
+                ? idMatches.find((user) => normalizeName(user.name) === normalizedName) || idMatches[0]
+                : idMatches[0];
+        }
+
+        function parseUserSelectValue(value) {
+            try {
+                const parsed = JSON.parse(decodeURIComponent(value));
+                return {
+                    id: normalizeUserId(parsed.id),
+                    name: String(parsed.name || '').trim()
+                };
+            } catch (error) {
+                return { id: normalizeUserId(value), name: '' };
+            }
+        }
+
+        function makeUserSelectValue(user) {
+            return encodeURIComponent(JSON.stringify({ id: user.id, name: user.name }));
+        }
+
+        function isSameRequestUser(request, user) {
+            if (!isSameUserId(request.userId, user.id)) return false;
+            return !hasDuplicateUserId(user.id) || normalizeName(request.name) === normalizeName(user.name);
+        }
+
+        function getUserIdentityKey(user) {
+            return hasDuplicateUserId(user.id)
+                ? `${normalizeUserId(user.id)}|${normalizeName(user.name)}`
+                : normalizeUserId(user.id);
+        }
+
+        function getRequestUserIdentityKey(request) {
+            return hasDuplicateUserId(request.userId) && normalizeName(request.name)
+                ? `${normalizeUserId(request.userId)}|${normalizeName(request.name)}`
+                : normalizeUserId(request.userId);
         }
 
         function requestAppsScriptJsonp(action, params = {}) {
@@ -1156,20 +1206,20 @@
         function normalizeUsers(nextUsers) {
             const seen = new Set();
             return (nextUsers || [])
-                .map((user) => ({
+                .map((user, index) => ({
+                    id: normalizeUserId(user.id) || String(index + 1),
                     name: String(user.name || '').trim(),
                     department: String(user.department || '').trim(),
                     position: String(user.position || '').trim(),
                     level: String(user.level || '').trim()
                 }))
-                .filter((user) => user.name && user.department && user.position && user.level)
+                .filter((user) => user.id && user.name && user.department && user.position && user.level)
                 .filter((user) => {
-                    const key = `${user.name}|${user.department}|${user.position}|${user.level}`;
+                    const key = `${user.id}|${user.name}|${user.department}|${user.position}|${user.level}`;
                     if (seen.has(key)) return false;
                     seen.add(key);
                     return true;
-                })
-                .map((user, index) => ({ id: index + 1, ...user }));
+                });
         }
 
         function refreshMasterLists(extra = {}) {
@@ -1202,6 +1252,7 @@
                 action: 'SAVE_STAFF',
                 detail: {
                     users: users.map((user) => ({
+                        id: user.id,
                         name: user.name,
                         department: user.department,
                         position: user.position,
@@ -1221,6 +1272,14 @@
         }
 
         function findUserByRequestRecord(record) {
+            const idMatches = users.filter((user) => isSameUserId(user.id, record.userId));
+            const recordName = normalizeName(record.name);
+            if (idMatches.length === 1) return idMatches[0];
+            if (idMatches.length > 1 && recordName) {
+                const sameIdAndName = idMatches.find((user) => normalizeName(user.name) === recordName);
+                if (sameIdAndName) return sameIdAndName;
+            }
+
             const exactMatch = users.find((user) => (
                 normalizeName(user.name) === normalizeName(record.name)
                 && user.department === record.department
@@ -1429,7 +1488,7 @@
         }
 
         function getRequestLogDetail(request) {
-            const user = findUserById(request.userId);
+            const user = findUserById(request.userId, request.name);
             return {
                 requestId: request.id,
                 userId: request.userId,
@@ -1525,10 +1584,15 @@
             return Math.round((end - start) / 86400000);
         }
 
-        function getMaxConsecutiveRequestDays(userId, additionalDates, excludedRequestId = null) {
+        function getMaxConsecutiveRequestDays(targetUser, additionalDates, excludedRequestId = null) {
             const allDates = [
                 ...shiftRequests
-                    .filter((request) => request.userId === userId && request.id !== excludedRequestId)
+                    .filter((request) => (
+                        (typeof targetUser === 'object'
+                            ? isSameRequestUser(request, targetUser)
+                            : isSameUserId(request.userId, targetUser))
+                        && request.id !== excludedRequestId
+                    ))
                     .flatMap((request) => getRequestDates(request)),
                 ...additionalDates
             ];
@@ -1622,24 +1686,29 @@
         function getApprovedRequestsForCancel(cancelRequest) {
             const cancelDates = getRequestDates(cancelRequest);
             const cancelName = normalizeName(cancelRequest.name);
+            const cancelUser = {
+                id: cancelRequest.userId,
+                name: cancelRequest.name
+            };
             return shiftRequests.filter((request) => (
                 request.id !== cancelRequest.id
                 && request.status === 'Approved'
                 && request.leaveType !== 'ยกเลิก'
                 && (
-                    request.userId === cancelRequest.userId
-                    || (cancelName && normalizeName(request.name) === cancelName)
+                    (cancelRequest.userId && isSameRequestUser(request, cancelUser))
+                    || (!cancelRequest.userId && cancelName && normalizeName(request.name) === cancelName)
                 )
                 && getRequestDates(request).every((date) => cancelDates.includes(date))
             ));
         }
 
         function handleShiftRequest() {
-            const userId = Number(document.getElementById('form-user-select').value);
+            const selectedUser = parseUserSelectValue(document.getElementById('form-user-select').value);
+            const userId = selectedUser.id;
             const startDate = document.getElementById('form-start-date').value;
             const endDate = document.getElementById('form-end-date').value;
             const leaveType = document.getElementById('form-leave-type').value;
-            const user = findUserById(userId);
+            const user = findUserById(userId, selectedUser.name);
 
             if (!user || !startDate || !endDate || !leaveType) return;
             if (endDate < startDate) {
@@ -1660,7 +1729,7 @@
                     return;
                 }
                 const duplicateCancel = shiftRequests.some((request) => (
-                    request.userId === user.id
+                    isSameRequestUser(request, user)
                     && request.leaveType === 'ยกเลิก'
                     && request.status === 'Pending'
                     && getRequestDates(request).some((date) => requestedDates.includes(date))
@@ -1679,6 +1748,7 @@
                 const newRequest = {
                     id: Date.now(),
                     userId: user.id,
+                    name: user.name,
                     startDate,
                     endDate,
                     dates: requestedDates,
@@ -1699,7 +1769,7 @@
                 return;
             }
 
-            if (!canRequestMoreThanNineDays(leaveType) && (requestedDates.length > 9 || getMaxConsecutiveRequestDays(user.id, requestedDates) > 9)) {
+            if (!canRequestMoreThanNineDays(leaveType) && (requestedDates.length > 9 || getMaxConsecutiveRequestDays(user, requestedDates) > 9)) {
                 alert('คุณขอเวรติดต่อกันเกิน 9 วัน');
                 return;
             }
@@ -1747,7 +1817,7 @@
             }
 
             const duplicate = shiftRequests.some((request) => (
-                request.userId === user.id
+                isSameRequestUser(request, user)
                 && getRequestDates(request).some((date) => requestedDates.includes(date))
             ));
             if (duplicate) {
@@ -1761,6 +1831,7 @@
                 const newRequest = {
                     id: Date.now(),
                     userId: user.id,
+                    name: user.name,
                     startDate,
                     endDate,
                     dates: requestedDates,
@@ -1778,6 +1849,7 @@
             } else {
                 pendingReserveData = {
                     userId: user.id,
+                    name: user.name,
                     startDate,
                     endDate,
                     dates: requestedDates,
@@ -1800,6 +1872,7 @@
             const newRequest = {
                 id: Date.now(),
                 userId: pendingReserveData.userId,
+                name: pendingReserveData.name,
                 startDate: pendingReserveData.startDate,
                 endDate: pendingReserveData.endDate,
                 dates: pendingReserveData.dates,
@@ -1897,7 +1970,7 @@
 
                 if (reserves.length > 0) {
                     const nextReserve = reserves[0];
-                    const nextUser = findUserById(nextReserve.userId);
+                    const nextUser = findUserById(nextReserve.userId, nextReserve.name);
                     pendingPromoteData = nextReserve;
                     document.getElementById('promote-modal-text').innerHTML = `โควตาวันที่ <strong>${getRequestDateText(targetShift)}</strong> หน่วยงาน <strong>${targetShift.department}</strong> ตำแหน่ง <strong>${targetShift.position}</strong> กลุ่ม <strong>${targetShift.level}</strong> ว่างลงแล้ว! ตรวจพบตัวสำรองคิวแรกคือ <strong>${nextUser ? nextUser.name : 'ผู้ใช้'}</strong> คุณต้องการเลื่อนสิทธิ์ให้เป็นตัวจริงทันทีหรือไม่?`;
                     document.getElementById('promote-modal').classList.remove('hidden');
@@ -1936,23 +2009,26 @@
             renderAdminReserveQueue();
         }
 
-        window.changeUserName = function(userId, newName) {
-            const user = findUserById(userId);
+        window.changeUserName = function(userId, userName, newName) {
+            const user = findUserById(userId, userName);
             if (user) {
                 const oldName = user.name;
+                shiftRequests.forEach((request) => {
+                    if (isSameRequestUser(request, user)) request.name = newName;
+                });
                 user.name = newName;
                 refreshAdminViews();
                 saveStaffToSheet();
             }
         };
 
-        window.changeUserLevel = function(userId, newLevel) {
-            const user = findUserById(userId);
+        window.changeUserLevel = function(userId, userName, newLevel) {
+            const user = findUserById(userId, userName);
             if (user) {
                 const oldLevel = user.level;
                 user.level = newLevel;
                 shiftRequests.forEach((request) => {
-                    if (request.userId === userId) request.level = newLevel;
+                    if (isSameRequestUser(request, user)) request.level = newLevel;
                 });
                 if (!levels.includes(newLevel)) levels.push(newLevel);
                 refreshAdminViews();
@@ -1960,13 +2036,13 @@
             }
         };
 
-        window.changeUserPosition = function(userId, newPosition) {
-            const user = findUserById(userId);
+        window.changeUserPosition = function(userId, userName, newPosition) {
+            const user = findUserById(userId, userName);
             if (user) {
                 const oldPosition = user.position;
                 user.position = newPosition;
                 shiftRequests.forEach((request) => {
-                    if (request.userId === userId) request.position = newPosition;
+                    if (isSameRequestUser(request, user)) request.position = newPosition;
                 });
                 if (!positions.includes(newPosition)) positions.push(newPosition);
                 refreshAdminViews();
@@ -1974,13 +2050,13 @@
             }
         };
 
-        window.changeUserDepartment = function(userId, newDepartment) {
-            const user = findUserById(userId);
+        window.changeUserDepartment = function(userId, userName, newDepartment) {
+            const user = findUserById(userId, userName);
             if (user) {
                 const oldDepartment = user.department;
                 user.department = newDepartment;
                 shiftRequests.forEach((request) => {
-                    if (request.userId === userId) request.department = newDepartment;
+                    if (isSameRequestUser(request, user)) request.department = newDepartment;
                 });
                 if (!departments.includes(newDepartment)) departments.push(newDepartment);
                 refreshAdminViews();
@@ -2011,7 +2087,7 @@
             }
 
             users.push({
-                id: Math.max(0, ...users.map((user) => user.id)) + 1,
+                id: String(Math.max(0, ...users.map((user) => Number(user.id) || 0)) + 1),
                 name,
                 department,
                 position,
@@ -2022,12 +2098,12 @@
             saveStaffToSheet();
         };
 
-        window.deleteUser = function(userId) {
-            const user = findUserById(userId);
+        window.deleteUser = function(userId, userName = '') {
+            const user = findUserById(userId, userName);
             if (!user) return;
             if (!confirm(`ยืนยันลบรายชื่อ ${user.name} หรือไม่?`)) return;
-            users = users.filter((item) => item.id !== userId);
-            shiftRequests = shiftRequests.filter((request) => request.userId !== userId);
+            users = users.filter((item) => item !== user);
+            shiftRequests = shiftRequests.filter((request) => !isSameRequestUser(request, user));
             refreshAdminViews();
             saveStaffToSheet();
         };
@@ -2051,9 +2127,9 @@
 
         window.deleteDepartment = function(department) {
             if (!confirm(`ยืนยันลบหน่วยงาน ${department} หรือไม่? รายชื่อและคำขอเวรของหน่วยงานนี้จะถูกลบด้วย`)) return;
-            const deletedUserIds = users.filter((user) => user.department === department).map((user) => user.id);
+            const deletedUsers = users.filter((user) => user.department === department);
             users = users.filter((user) => user.department !== department);
-            shiftRequests = shiftRequests.filter((request) => !deletedUserIds.includes(request.userId));
+            shiftRequests = shiftRequests.filter((request) => !deletedUsers.some((user) => isSameRequestUser(request, user)));
             const index = departments.indexOf(department);
             if (index >= 0) departments.splice(index, 1);
             refreshAdminViews();
@@ -2095,9 +2171,9 @@
 
         window.deletePosition = function(position) {
             if (!confirm(`ยืนยันลบตำแหน่ง ${position} หรือไม่? รายชื่อและคำขอเวรของตำแหน่งนี้จะถูกลบด้วย`)) return;
-            const deletedUserIds = users.filter((user) => user.position === position).map((user) => user.id);
+            const deletedUsers = users.filter((user) => user.position === position);
             users = users.filter((user) => user.position !== position);
-            shiftRequests = shiftRequests.filter((request) => !deletedUserIds.includes(request.userId));
+            shiftRequests = shiftRequests.filter((request) => !deletedUsers.some((user) => isSameRequestUser(request, user)));
             const index = positions.indexOf(position);
             if (index >= 0) positions.splice(index, 1);
             refreshAdminViews();
@@ -2139,9 +2215,9 @@
 
         window.deleteLevel = function(level) {
             if (!confirm(`ยืนยันลบ ${level} หรือไม่? รายชื่อและคำขอเวรของ Level นี้จะถูกลบด้วย`)) return;
-            const deletedUserIds = users.filter((user) => user.level === level).map((user) => user.id);
+            const deletedUsers = users.filter((user) => user.level === level);
             users = users.filter((user) => user.level !== level);
-            shiftRequests = shiftRequests.filter((request) => !deletedUserIds.includes(request.userId));
+            shiftRequests = shiftRequests.filter((request) => !deletedUsers.some((user) => isSameRequestUser(request, user)));
             const index = levels.indexOf(level);
             if (index >= 0) levels.splice(index, 1);
             refreshAdminViews();
@@ -2198,7 +2274,8 @@
             }
 
             const newDates = getDateRange(newStartDate, newEndDate);
-            if (!canRequestMoreThanNineDays(request.leaveType) && (newDates.length > 9 || getMaxConsecutiveRequestDays(request.userId, newDates, request.id) > 9)) {
+            const requestUser = findUserById(request.userId, request.name) || { id: request.userId, name: request.name };
+            if (!canRequestMoreThanNineDays(request.leaveType) && (newDates.length > 9 || getMaxConsecutiveRequestDays(requestUser, newDates, request.id) > 9)) {
                 alert('คุณขอเวรติดต่อกันเกิน 9 วัน');
                 return;
             }
@@ -2436,7 +2513,7 @@
             const selectedPosition = positionSelect.value;
             const filteredUsers = users.filter((user) => user.department === selectedDepartment && user.position === selectedPosition);
             select.innerHTML = filteredUsers.length
-                ? filteredUsers.map((user) => `<option value="${user.id}">${user.name} (${user.level})</option>`).join('')
+                ? filteredUsers.map((user) => `<option value="${makeUserSelectValue(user)}">${user.name} (${user.level})</option>`).join('')
                 : '<option value="">ไม่มีเจ้าหน้าที่ในเงื่อนไขนี้</option>';
         }
 
@@ -2465,29 +2542,35 @@
             }
 
             tbody.innerHTML = filteredUsers.map((user) => `
+                ${(() => {
+                    const userIdArg = JSON.stringify(user.id);
+                    const userNameArg = JSON.stringify(user.name);
+                    return `
                 <tr class="hover:bg-gray-50 transition">
                     <td class="p-3 font-medium text-gray-700">
-                        <input value="${user.name}" onchange="changeUserName(${user.id}, this.value)" class="w-full p-1.5 text-sm bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
+                        <input value="${user.name}" onchange="changeUserName(${userIdArg}, ${userNameArg}, this.value)" class="w-full p-1.5 text-sm bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
                     </td>
                     <td class="p-3">
-                        <select onchange="changeUserDepartment(${user.id}, this.value)" class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
+                        <select onchange="changeUserDepartment(${userIdArg}, ${userNameArg}, this.value)" class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
                             ${departments.map((department) => `<option value="${department}" ${user.department === department ? 'selected' : ''}>${department}</option>`).join('')}
                         </select>
                     </td>
                     <td class="p-3">
-                        <select onchange="changeUserPosition(${user.id}, this.value)" class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
+                        <select onchange="changeUserPosition(${userIdArg}, ${userNameArg}, this.value)" class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
                             ${positions.map((position) => `<option value="${position}" ${user.position === position ? 'selected' : ''}>${position}</option>`).join('')}
                         </select>
                     </td>
                     <td class="p-3">
-                        <select onchange="changeUserLevel(${user.id}, this.value)" class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
+                        <select onchange="changeUserLevel(${userIdArg}, ${userNameArg}, this.value)" class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
                             ${levels.map((level) => `<option value="${level}" ${user.level === level ? 'selected' : ''}>${level}</option>`).join('')}
                         </select>
                     </td>
                     <td class="p-3">
-                        <button onclick="deleteUser(${user.id})" class="text-red-500 hover:text-red-700 text-xs font-semibold">ลบ</button>
+                        <button onclick="deleteUser(${userIdArg}, ${userNameArg})" class="text-red-500 hover:text-red-700 text-xs font-semibold">ลบ</button>
                     </td>
                 </tr>
+                    `;
+                })()}
             `).join('');
         }
 
@@ -2538,19 +2621,25 @@
             if (selectedType === 'user') {
                 title.innerText = 'รายการเจ้าหน้าที่เดิม';
                 container.innerHTML = users.map((user) => `
+                    ${(() => {
+                        const userIdArg = JSON.stringify(user.id);
+                        const userNameArg = JSON.stringify(user.name);
+                        return `
                     <div class="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1fr_0.8fr_auto] gap-2 rounded-lg bg-white p-2 text-xs">
-                        <input value="${user.name}" onchange="changeUserName(${user.id}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
-                        <select onchange="changeUserDepartment(${user.id}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
+                        <input value="${user.name}" onchange="changeUserName(${userIdArg}, ${userNameArg}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
+                        <select onchange="changeUserDepartment(${userIdArg}, ${userNameArg}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
                             ${departments.map((department) => `<option value="${department}" ${user.department === department ? 'selected' : ''}>${department}</option>`).join('')}
                         </select>
-                        <select onchange="changeUserPosition(${user.id}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
+                        <select onchange="changeUserPosition(${userIdArg}, ${userNameArg}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
                             ${positions.map((position) => `<option value="${position}" ${user.position === position ? 'selected' : ''}>${position}</option>`).join('')}
                         </select>
-                        <select onchange="changeUserLevel(${user.id}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
+                        <select onchange="changeUserLevel(${userIdArg}, ${userNameArg}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
                             ${levels.map((level) => `<option value="${level}" ${user.level === level ? 'selected' : ''}>${level}</option>`).join('')}
                         </select>
-                        <button onclick="deleteUser(${user.id})" class="text-red-500 hover:text-red-700 font-semibold">ลบ</button>
+                        <button onclick="deleteUser(${userIdArg}, ${userNameArg})" class="text-red-500 hover:text-red-700 font-semibold">ลบ</button>
                     </div>
+                        `;
+                    })()}
                 `).join('');
                 return;
             }
@@ -2820,7 +2909,7 @@
             }
 
             selectedMonthlyRequestId = request.id;
-            const user = findUserById(request.userId);
+            const user = findUserById(request.userId, request.name);
             const statusText = request.leaveType === 'ยกเลิก' && request.status === 'Pending'
                 ? 'รอยืนยันยกเลิก'
                 : request.status === 'Pending'
@@ -2943,10 +3032,15 @@
                 }
             };
             monthlyEntries.forEach(({ request, date }) => {
-                addMonthlyEntry(`${request.userId}|${date}`, request);
                 const requestName = normalizeName(request.name);
+                const requestIdentityKey = getRequestUserIdentityKey(request);
+                if (requestIdentityKey) {
+                    addMonthlyEntry(`${requestIdentityKey}|${date}`, request);
+                }
                 if (requestName) {
                     addMonthlyEntry(`${requestName}|${date}`, request);
+                } else if (request.userId) {
+                    addMonthlyEntry(`${normalizeUserId(request.userId)}|${date}`, request);
                 }
             });
 
@@ -2982,8 +3076,9 @@
                                             </div>
                                         </td>
                                         ${days.map(({ date }) => {
-                                            const dayRequests = entriesByUserAndDate.get(`${user.id}|${date}`)
+                                            const dayRequests = entriesByUserAndDate.get(`${getUserIdentityKey(user)}|${date}`)
                                                 || entriesByUserAndDate.get(`${normalizeName(user.name)}|${date}`)
+                                                || (!hasDuplicateUserId(user.id) ? entriesByUserAndDate.get(`${normalizeUserId(user.id)}|${date}`) : null)
                                                 || [];
                                             const detail = dayRequests.map((request) => `${request.leaveType || '-'} ${request.status === 'Pending' ? '(รอ)' : ''}`).join(', ');
                                             const title = detail ? `${user.name}\n${formatSingleHeatmapDate(date)}\n${detail}` : '';
@@ -3045,19 +3140,26 @@
                 (!selectedDepartment || user.department === selectedDepartment)
                 && (!selectedPosition || user.position === selectedPosition)
             ));
-            const filteredUserIds = new Set(filteredUsers.map((user) => String(user.id)));
+            const matchesFilteredUser = (request) => filteredUsers.some((user) => (
+                    isSameRequestUser(request, user)
+                    || (
+                    normalizeName(user.name) === normalizeName(request.name)
+                    && (!request.department || request.department === user.department)
+                    && (!request.position || request.position === user.position)
+                    )
+                ));
             const entries = shiftRequests
                 .flatMap((request) => getRequestDates(request).map((date) => ({ request, date })))
                 .filter((entry) => (
                     getFiscalYearFromDate(entry.date) === fiscalYear
-                    && filteredUserIds.has(String(entry.request.userId))
+                    && matchesFilteredUser(entry.request)
                 ));
             const approvedEntries = entries.filter(({ request }) => request.status === 'Approved');
             const userStats = new Map();
             const leaveTypeCounts = Object.fromEntries(leaveTypes.map((leaveType) => [leaveType, 0]));
 
             filteredUsers.forEach((user) => {
-                userStats.set(user.id, {
+                userStats.set(getUserIdentityKey(user), {
                     user,
                     monthCounts: Object.fromEntries(fiscalMonths.map((month) => [month.key, 0])),
                     monthDetails: Object.fromEntries(fiscalMonths.map((month) => [month.key, {}])),
@@ -3068,7 +3170,7 @@
             });
 
             approvedEntries.forEach(({ request, date }) => {
-                const stats = userStats.get(request.userId);
+                const stats = userStats.get(getRequestUserIdentityKey(request));
                 if (!stats) return;
                 const monthKey = date.slice(0, 7);
                 stats.monthCounts[monthKey] = (stats.monthCounts[monthKey] || 0) + 1;
@@ -3080,7 +3182,7 @@
             });
 
             approvedEntries.forEach(({ request, date }) => {
-                const stats = userStats.get(request.userId);
+                const stats = userStats.get(getRequestUserIdentityKey(request));
                 if (!stats) return;
                 const leaveType = request.leaveType || '-';
                 leaveTypeCounts[leaveType] = (leaveTypeCounts[leaveType] || 0) + 1;
@@ -3164,7 +3266,7 @@
             }
 
             container.innerHTML = pending.map((request) => {
-                const user = findUserById(request.userId);
+                const user = findUserById(request.userId, request.name);
                 const displayName = request.name || (user ? user.name : 'ผู้ใช้');
                 const trainingText = request.trainingNote ? ` • หมายเหตุ: ${request.trainingNote}` : '';
                 return `
@@ -3197,7 +3299,7 @@
             }
 
             container.innerHTML = pendingCancels.map((request) => {
-                const user = findUserById(request.userId);
+                const user = findUserById(request.userId, request.name);
                 const displayName = request.name || (user ? user.name : 'ผู้ใช้');
                 const trainingText = request.trainingNote ? ` • เหตุผล: ${request.trainingNote}` : '';
                 return `
