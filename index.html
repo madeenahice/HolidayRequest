@@ -1404,8 +1404,27 @@
                 if (response && response.ok) return { ok: true, message: '' };
                 return {
                     ok: false,
-                    message: response?.message || 'รหัส Admin ไม่ถูกต้อง หรือ Apps Script ยังไม่พบค่า ADMIN_PASSWORD'
+                    message: response?.message || 'รหัส Admin ไม่ถูกต้อง'
                 };
+            }).catch(async () => {
+                try {
+                    const status = await requestAppsScriptJsonp('status');
+                    if (status && status.ok && !status.hasAdminPassword) {
+                        return {
+                            ok: false,
+                            message: 'ยังไม่ได้ตั้งค่า ADMIN_PASSWORD ใน Apps Script'
+                        };
+                    }
+                    return {
+                        ok: false,
+                        message: 'เชื่อมต่อ Apps Script เพื่อตรวจรหัส Admin ไม่สำเร็จ กรุณาตรวจ Web App URL หรือ Deploy ล่าสุด'
+                    };
+                } catch (error) {
+                    return {
+                        ok: false,
+                        message: 'เชื่อมต่อ Apps Script เพื่อตรวจรหัส Admin ไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตและ Deploy ล่าสุด'
+                    };
+                }
             });
         }
 
