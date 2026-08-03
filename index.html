@@ -607,8 +607,10 @@
             monthly: { page: 1, pageSize: 15 }
         };
         let realtimeTimerId = null;
+        let holidaySyncTimerId = null;
         let realtimeRefreshTimerId = null;
         let lastRealtimeSignature = '';
+        let lastPublicHolidaySignature = '';
 
         const levelColors = {
             'Level 1': { bg: 'bg-sky-50 text-sky-700 border-sky-200', dot: 'bg-sky-500' },
@@ -624,21 +626,59 @@
         };
         const leaveTypes = ['Vac', 'Off', 'ยกเลิก', 'ลากิจ', 'อบรม', 'ลาป่วย', 'ลาคลอด', 'ลาบวช'];
         const longLeaveTypes = ['ลาคลอด', 'ลาป่วย', 'ลาบวช'];
-        const publicHolidays = {
-            '2026-10-13': 'วันคล้ายวันสวรรคต ร.9',
+        const fallbackPublicHolidays = {
+            '2026-01-01': 'วันขึ้นปีใหม่',
+            '2026-01-02': 'วันหยุดราชการเพิ่มเป็นกรณีพิเศษ',
+            '2026-03-03': 'วันมาฆบูชา',
+            '2026-04-06': 'วันจักรี',
+            '2026-04-13': 'วันสงกรานต์',
+            '2026-04-14': 'วันสงกรานต์',
+            '2026-04-15': 'วันสงกรานต์',
+            '2026-05-04': 'วันฉัตรมงคล',
+            '2026-05-13': 'วันพืชมงคล',
+            '2026-05-31': 'วันวิสาขบูชา',
+            '2026-06-01': 'วันหยุดชดเชย วันวิสาขบูชา',
+            '2026-06-03': 'วันเฉลิมพระชนมพรรษาสมเด็จพระนางเจ้าฯ พระบรมราชินี',
+            '2026-07-28': 'วันเฉลิมพระชนมพรรษา สมเด็จพระเจ้าอยู่หัวมหาวชิราลงกรณ บดินทรเทพยวรางกูร',
+            '2026-07-29': 'วันอาสาฬหบูชา',
+            '2026-07-30': 'วันเข้าพรรษา',
+            '2026-08-12': 'วันเฉลิมพระชนมพรรษา สมเด็จพระนางเจ้าฯ พระบรมราชินีนาถ',
+            '2026-10-13': 'วันคล้ายวันสวรรคตของพระบาทสมเด็จพระปรมินทรมหาภูมิพลอดุลยเดชบรมนาถบพิตร',
             '2026-10-23': 'วันปิยมหาราช',
-            '2026-12-05': 'วันพ่อแห่งชาติ',
-            '2026-12-07': 'วันหยุดชดเชยวันพ่อแห่งชาติ',
+            '2026-12-05': 'วันคล้ายวันพระบรมราชสมภพของพระบาทสมเด็จพระบรมชนกาธิเบศรมหาภูมิพลอดุลยเดชมหาราช บรมนาถบพิตร วันชาติ และวันพ่อแห่งชาติ',
+            '2026-12-07': 'วันหยุดชดเชย วันพ่อแห่งชาติ',
             '2026-12-10': 'วันรัฐธรรมนูญ',
             '2026-12-31': 'วันสิ้นปี',
-            '2027-01-01': 'วันขึ้นปีใหม่'
+            '2027-01-01': 'วันขึ้นปีใหม่',
+            '2027-02-21': 'วันมาฆบูชา',
+            '2027-02-22': 'วันหยุดชดเชย วันมาฆบูชา',
+            '2027-04-06': 'วันจักรี',
+            '2027-04-13': 'วันสงกรานต์',
+            '2027-04-14': 'วันสงกรานต์',
+            '2027-04-15': 'วันสงกรานต์',
+            '2027-05-04': 'วันฉัตรมงคล',
+            '2027-05-20': 'วันวิสาขบูชา',
+            '2027-06-03': 'วันเฉลิมพระชนมพรรษาสมเด็จพระนางเจ้าฯ พระบรมราชินี',
+            '2027-07-18': 'วันอาสาฬหบูชา',
+            '2027-07-19': 'วันหยุดชดเชย วันอาสาฬหบูชา วันเข้าพรรษา',
+            '2027-07-28': 'วันเฉลิมพระชนมพรรษา สมเด็จพระเจ้าอยู่หัวมหาวชิราลงกรณ บดินทรเทพยวรางกูร',
+            '2027-08-12': 'วันเฉลิมพระชนมพรรษา สมเด็จพระนางเจ้าฯ พระบรมราชินีนาถ',
+            '2027-10-13': 'วันคล้ายวันสวรรคตของพระบาทสมเด็จพระปรมินทรมหาภูมิพลอดุลยเดชบรมนาถบพิตร',
+            '2027-10-23': 'วันปิยมหาราช',
+            '2027-10-25': 'วันหยุดชดเชยปิยมหาราช',
+            '2027-12-05': 'วันคล้ายวันพระบรมราชสมภพของพระบาทสมเด็จพระบรมชนกาธิเบศรมหาภูมิพลอดุลยเดชมหาราช บรมนาถบพิตร วันชาติ และวันพ่อแห่งชาติ',
+            '2027-12-06': 'วันหยุดชดเชย วันพ่อแห่งชาติ',
+            '2027-12-10': 'วันรัฐธรรมนูญ',
+            '2027-12-31': 'วันสิ้นปี'
         };
+        let publicHolidays = { ...fallbackPublicHolidays };
 
         document.addEventListener('DOMContentLoaded', async () => {
             initInputs();
             renderLeaveTypeDropdown();
             setupEventListeners();
             await loadStaffFromSheet();
+            await loadPublicHolidaysFromSheet({ silent: true });
             await loadShiftRequestsFromSheet({ silent: false });
             renderPositionDropdowns();
             renderUserDropdowns();
@@ -1264,6 +1304,50 @@
             });
         }
 
+        function normalizePublicHolidayMap(nextHolidays) {
+            return Object.fromEntries(
+                Object.entries(nextHolidays || {})
+                    .map(([date, name]) => [String(date || '').trim(), String(name || '').trim()])
+                    .filter(([date, name]) => /^\d{4}-\d{2}-\d{2}$/.test(date) && name)
+                    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+            );
+        }
+
+        function getPublicHolidaySignature(nextHolidays = publicHolidays) {
+            return JSON.stringify(Object.entries(normalizePublicHolidayMap(nextHolidays)));
+        }
+
+        function refreshHolidayDependentViews() {
+            renderCalendar();
+            const heatmapView = document.getElementById('admin-heatmap-view');
+            if (heatmapView && !heatmapView.classList.contains('hidden')) {
+                renderAdminHeatmap(false);
+            }
+        }
+
+        function applyPublicHolidays(nextHolidays) {
+            const normalizedHolidays = normalizePublicHolidayMap(nextHolidays);
+            const nextSignature = getPublicHolidaySignature(normalizedHolidays);
+            if (nextSignature === lastPublicHolidaySignature) return false;
+            publicHolidays = normalizedHolidays;
+            lastPublicHolidaySignature = nextSignature;
+            refreshHolidayDependentViews();
+            return true;
+        }
+
+        async function loadPublicHolidaysFromSheet({ silent = true } = {}) {
+            const response = await requestAppsScriptJsonp('getPublicHolidays');
+            if (!response || !response.ok || !response.holidays) {
+                if (!silent) {
+                    console.warn(response?.message || 'โหลดวันหยุดจาก Google Sheet ไม่สำเร็จ');
+                }
+                return false;
+            }
+
+            applyPublicHolidays(response.holidays);
+            return true;
+        }
+
         function saveStaffToSheet() {
             const payload = {
                 action: 'SAVE_STAFF',
@@ -1388,9 +1472,13 @@
 
         function startRealtimeSync() {
             if (realtimeTimerId) clearInterval(realtimeTimerId);
+            if (holidaySyncTimerId) clearInterval(holidaySyncTimerId);
             realtimeTimerId = setInterval(() => {
                 loadShiftRequestsFromSheet();
             }, 5000);
+            holidaySyncTimerId = setInterval(() => {
+                loadPublicHolidaysFromSheet();
+            }, 60000);
         }
 
         function updateRealtimeStatus(isConnected, requestCount = shiftRequests.length) {
@@ -2856,6 +2944,16 @@
             return ['อ', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'][new Date(`${dateStr}T00:00:00`).getDay()];
         }
 
+        function getMonthlyHolidayClass(dateStr) {
+            if (publicHolidays[dateStr]) return 'bg-yellow-50';
+            return isWeekend(dateStr) ? 'bg-green-50' : '';
+        }
+
+        function getMonthlyHolidayTitle(dateStr) {
+            if (publicHolidays[dateStr]) return publicHolidays[dateStr];
+            return isWeekend(dateStr) ? 'วันเสาร์-อาทิตย์' : '';
+        }
+
         function getHeatmapClass(count, maxCount) {
             if (!count) return 'bg-gray-50 text-gray-300 border-gray-100';
             const ratio = maxCount ? count / maxCount : 0;
@@ -3141,11 +3239,11 @@
                         <thead>
                             <tr class="bg-gray-50 text-gray-600">
                                 <th class="sticky left-0 z-20 min-w-[190px] border border-gray-200 bg-gray-50 p-2 text-left">ชื่อ-สกุล</th>
-                                ${days.map(({ day, date }) => `<th class="min-w-8 border border-gray-200 p-1 ${isWeekend(date) ? 'bg-green-50' : ''}">${day}</th>`).join('')}
+                                ${days.map(({ day, date }) => `<th class="min-w-8 border border-gray-200 p-1 ${getMonthlyHolidayClass(date)}" title="${getMonthlyHolidayTitle(date).replace(/"/g, '&quot;')}">${day}</th>`).join('')}
                             </tr>
                             <tr class="bg-white text-[10px] text-gray-500">
                                 <th class="sticky left-0 z-20 border border-gray-200 bg-white p-1 text-left">Level</th>
-                                ${days.map(({ date }) => `<th class="border border-gray-200 p-1 ${isWeekend(date) ? 'bg-green-50' : ''}">${getThaiWeekdayShort(date)}</th>`).join('')}
+                                ${days.map(({ date }) => `<th class="border border-gray-200 p-1 ${getMonthlyHolidayClass(date)}" title="${getMonthlyHolidayTitle(date).replace(/"/g, '&quot;')}">${getThaiWeekdayShort(date)}</th>`).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -3165,9 +3263,10 @@
                                                 || (!hasDuplicateUserId(user.id) ? entriesByUserAndDate.get(`${normalizeUserId(user.id)}|${date}`) : null)
                                                 || [];
                                             const detail = dayRequests.map((request) => `${request.leaveType || '-'} ${request.status === 'Pending' ? '(รอ)' : ''}`).join(', ');
-                                            const title = detail ? `${user.name}\n${formatSingleHeatmapDate(date)}\n${detail}` : '';
+                                            const holidayTitle = getMonthlyHolidayTitle(date);
+                                            const title = [holidayTitle, detail ? `${user.name}\n${formatSingleHeatmapDate(date)}\n${detail}` : ''].filter(Boolean).join('\n');
                                             return `
-                                                <td class="h-7 border border-gray-200 p-1 ${isWeekend(date) ? 'bg-green-50' : 'bg-white'}" title="${title.replace(/"/g, '&quot;')}">
+                                                <td class="h-7 border border-gray-200 p-1 ${getMonthlyHolidayClass(date) || 'bg-white'}" title="${title.replace(/"/g, '&quot;')}">
                                                     <div class="flex flex-wrap items-center justify-center gap-0.5">
                                                         ${dayRequests.map((request) => {
                                                             const symbol = getMonthlyLeaveSymbol(request.leaveType);
