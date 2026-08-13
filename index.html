@@ -2064,13 +2064,9 @@
             }
             const quotaLimit = getQuotaLimit(target.level);
             const canApproveAllDates = getRequestDates(target).every((date) => getApprovedCount(date, target.department, target.position, target.level) < quotaLimit);
-            if (!canApproveAllDates) {
-                alert('ยังอนุมัติไม่ได้ เพราะโควตาของหน่วยงาน ตำแหน่ง และ Level นี้เต็มอยู่');
-                return;
-            }
             target.status = 'Approved';
             logAction('APPROVE_PENDING_REQUEST', getRequestLogDetail(target));
-            alert('อนุมัติตัวสำรองเรียบร้อยแล้ว');
+            alert(canApproveAllDates ? 'อนุมัติตัวสำรองเรียบร้อยแล้ว' : 'อนุมัติตัวสำรองเรียบร้อยแล้ว (Admin อนุมัติเกินโควต้า)');
             renderCalendar();
             renderAdminReserveQueue();
         }
@@ -2152,17 +2148,9 @@
             if (target) {
                 const quotaLimit = getQuotaLimit(target.level);
                 const canPromoteAllDates = getRequestDates(target).every((date) => getApprovedCount(date, target.department, target.position, target.level) < quotaLimit);
-                if (!canPromoteAllDates) {
-                    alert('ยังเลื่อนสิทธิ์ไม่ได้ เพราะบางวันในช่วงที่ขอโควตาเต็มอยู่');
-                    document.getElementById('promote-modal').classList.add('hidden');
-                    pendingPromoteData = null;
-                    renderCalendar();
-                    renderAdminReserveQueue();
-                    return;
-                }
                 target.status = 'Approved';
                 logAction('PROMOTE_PENDING_REQUEST', getRequestLogDetail(target));
-                alert('เลื่อนสิทธิ์ตัวสำรองให้เป็นตัวจริงเรียบร้อยแล้ว');
+                alert(canPromoteAllDates ? 'เลื่อนสิทธิ์ตัวสำรองให้เป็นตัวจริงเรียบร้อยแล้ว' : 'เลื่อนสิทธิ์ตัวสำรองให้เป็นตัวจริงเรียบร้อยแล้ว (Admin อนุมัติเกินโควต้า)');
             }
             document.getElementById('promote-modal').classList.add('hidden');
             pendingPromoteData = null;
