@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>บันทึกการลา สาย แสกนบัตร</title>
+    <title>ระบบขอเวร งานเวชศาสตร์ฉุกเฉิน</title>
     <meta name="theme-color" content="#3f8f84">
-    <meta name="application-name" content="Leave & Time">
-    <meta name="apple-mobile-web-app-title" content="Leave & Time">
+    <meta name="application-name" content="ขอเวร">
+    <meta name="apple-mobile-web-app-title" content="ขอเวร">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <link rel="manifest" href="./manifest.webmanifest?v=20260717">
     <link rel="icon" href="./favicon.ico?v=20260717" sizes="any">
@@ -181,161 +181,26 @@
         #heatmap-summary > div > div:last-child {
             color: var(--palette-ink) !important;
         }
-
-        #admin-report-sidebar {
-            inset: 0 auto 0 0 !important;
-            width: 18rem !important;
-            padding: 1.5rem 1.25rem !important;
-            border: 0 !important;
-            border-radius: 0 !important;
-            background: #5f82bd !important;
-            color: #f8fbff !important;
-            box-shadow: 12px 0 34px rgba(41, 68, 116, 0.18) !important;
-            z-index: 60 !important;
-        }
-
-        #admin-report-sidebar .sidebar-brand {
-            display: flex;
-            align-items: center;
-            gap: 0.875rem;
-            margin-bottom: 1.5rem;
-        }
-
-        #admin-report-sidebar .sidebar-brand-mark {
-            width: 3.25rem;
-            height: 3.25rem;
-            border-radius: 0.875rem;
-            display: grid;
-            place-items: center;
-            background: #ffffff;
-            color: #5f82bd;
-            font-size: 1.25rem;
-            font-weight: 900;
-        }
-
-        #admin-report-sidebar .sidebar-brand-title {
-            font-size: 1.05rem;
-            font-weight: 900;
-            line-height: 1.2;
-        }
-
-        #admin-report-sidebar .sidebar-brand-subtitle,
-        #admin-report-sidebar .sidebar-description {
-            color: rgba(248, 251, 255, 0.78);
-        }
-
-        #admin-report-sidebar .sidebar-description {
-            margin-bottom: 1.75rem;
-            font-weight: 700;
-            line-height: 1.65;
-        }
-
-        #admin-report-sidebar button {
-            color: #f8fbff;
-        }
-
-        #admin-report-sidebar button.active {
-            background: rgba(255, 255, 255, 0.2) !important;
-            border-color: rgba(255, 255, 255, 0.35) !important;
-            color: #ffffff !important;
-        }
-
-        #admin-report-sidebar button:hover {
-            background: rgba(255, 255, 255, 0.14) !important;
-        }
-
-        #admin-late-view {
-            background: rgba(255, 253, 247, 0.96) !important;
-            border-color: var(--palette-line) !important;
-            box-shadow: 0 18px 40px rgba(188, 226, 158, 0.16) !important;
-        }
-
-        body.admin-report-sidebar-visible main {
-            padding-left: 1rem;
-            padding-right: 1rem;
-        }
-
-        body.dashboard-report-visible nav {
-            display: none !important;
-        }
-
-        @media (min-width: 768px) {
-            body.admin-report-sidebar-visible main {
-                width: calc(100% - 18rem);
-                max-width: calc(100% - 18rem);
-                margin-left: 18rem;
-                margin-right: 0;
-            }
-        }
-
-        @media (max-width: 767px) {
-            #admin-report-sidebar {
-                position: static !important;
-                width: auto !important;
-            }
-
-            body.admin-report-sidebar-visible main {
-                width: 100%;
-                max-width: 100%;
-                margin-left: 0;
-            }
-        }
-
-        @media (min-width: 1280px) {
-            body.admin-report-sidebar-visible nav {
-                margin-left: 18rem;
-                width: calc(100% - 18rem);
-            }
-
-            body.admin-report-sidebar-visible main {
-                max-width: calc(100% - 18rem);
-                margin-left: 18rem;
-                margin-right: 0;
-                padding-left: 2rem;
-                padding-right: 2rem;
-            }
-        }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 font-sans min-h-screen dashboard-report-visible admin-report-sidebar-visible">
+<body class="bg-gray-50 text-gray-800 font-sans min-h-screen">
 
     <nav class="bg-teal-600 text-white shadow-md p-3 md:p-4 sticky top-0 z-50">
         <div class="container mx-auto flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
-            <h1 class="text-lg md:text-xl font-bold leading-snug"><i class="fa-solid fa-chart-simple mr-2"></i>บันทึกการลา สาย แสกนบัตร</h1>
+            <h1 class="text-lg md:text-xl font-bold leading-snug"><i class="fa-solid fa-calendar-days mr-2"></i>ระบบขอเวร งานเวชศาสตร์ฉุกเฉิน</h1>
             <div class="flex flex-wrap items-center gap-2 md:gap-4">
-                <span class="hidden text-xs md:text-sm bg-teal-700 px-3 py-1.5 rounded-full">
+                <span class="text-xs md:text-sm bg-teal-700 px-3 py-1.5 rounded-full">
                     สถานะปัจจุบัน: <strong id="current-role-text">พนักงานทั่วไป (User)</strong>
                 </span>
                 <span id="realtime-status" class="text-xs bg-teal-700/80 px-3 py-1.5 rounded-full">
                     Realtime: กำลังเชื่อมต่อ
                 </span>
-                <button id="btn-toggle-role" class="hidden bg-amber-500 hover:bg-amber-600 text-white font-medium px-3 md:px-4 py-1.5 rounded-lg text-sm shadow transition">
+                <button id="btn-toggle-role" class="bg-amber-500 hover:bg-amber-600 text-white font-medium px-3 md:px-4 py-1.5 rounded-lg text-sm shadow transition">
                     <i class="fa-solid fa-user-gear mr-1"></i> สลับเป็น Admin
                 </button>
             </div>
         </div>
     </nav>
-
-    <aside id="admin-report-sidebar" class="fixed p-5">
-        <div class="sidebar-brand">
-            <div class="sidebar-brand-mark">HR</div>
-            <div>
-                <div class="sidebar-brand-title">Leave & Time</div>
-                <div class="sidebar-brand-subtitle text-sm font-bold">ปีงบ ต.ค. - ก.ย.</div>
-            </div>
-        </div>
-        <p class="sidebar-description text-sm">สรุปการลา สาย และไม่ได้สแกนบัตรจาก Google Sheets</p>
-        <div class="space-y-2">
-            <button id="btn-sidebar-leave-summary" type="button" class="admin-report-nav-btn active flex w-full items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-left text-sm font-semibold hover:bg-green-50">
-                <i class="fa-solid fa-chart-simple w-4 text-center"></i>
-                <span>สรุปวันลา</span>
-            </button>
-            <button id="btn-sidebar-late" type="button" class="admin-report-nav-btn flex w-full items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-left text-sm font-semibold hover:bg-green-50">
-                <i class="fa-solid fa-clock w-4 text-center"></i>
-                <span>สาย</span>
-            </button>
-        </div>
-    </aside>
 
     <main class="container mx-auto p-3 md:p-6 grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6">
         
@@ -348,7 +213,7 @@
                     <i class="fa-solid fa-calendar-days mr-2"></i> Calendar
                 </button>
                 <button id="btn-admin-heatmap" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-3 rounded-lg text-sm font-semibold transition text-left">
-                    <i class="fa-solid fa-chart-simple mr-2"></i> สรุปวันลา
+                    <i class="fa-solid fa-chart-simple mr-2"></i> Heatmap
                 </button>
                 <button id="btn-admin-pending" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-3 rounded-lg text-sm font-semibold transition text-left">
                     <i class="fa-solid fa-list-check mr-2"></i> Pending
@@ -465,16 +330,6 @@
             </div>
         </div>
 
-        <div id="admin-late-view" class="xl:col-span-2 bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-teal-200 hidden min-w-0">
-            <div class="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <h2 class="flex items-center gap-2 text-lg font-bold text-teal-700 md:text-xl">
-                    <i class="fa-solid fa-clock"></i> สาย
-                </h2>
-                <div id="late-summary-count" class="text-xs font-semibold text-teal-700"></div>
-            </div>
-            <div id="late-summary-list" class="rounded-xl border border-gray-100"></div>
-        </div>
-
         <div id="admin-management-view" class="xl:col-span-2 bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-amber-200 hidden min-w-0">
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
                 <h2 class="text-lg md:text-xl font-bold text-amber-700 flex items-center gap-2">
@@ -585,26 +440,15 @@
 
         <div id="admin-heatmap-view" class="xl:col-span-2 bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-teal-200 hidden min-w-0">
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
-                <div>
-                    <h2 class="text-2xl md:text-4xl font-bold text-teal-700 flex items-center gap-2">
-                        <i class="fa-solid fa-chart-simple"></i> บันทึกการลา สาย แสกนบัตร
-                    </h2>
-                    <p class="mt-2 text-sm md:text-base font-semibold text-gray-500">Dashboard รายเดือน แยกตามปีงบ หน่วยงาน และตำแหน่ง</p>
-                </div>
+                <h2 class="text-lg md:text-xl font-bold text-teal-700 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-simple"></i> Heatmap
+                </h2>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
                 <label class="text-xs font-semibold text-gray-600">
                     ปีงบประมาณ
                     <select id="heatmap-fiscal-year" class="mt-1 w-full p-2 text-sm bg-white border border-teal-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500"></select>
-                </label>
-                <label class="text-xs font-semibold text-gray-600">
-                    ประเภทหลักลา
-                    <select id="heatmap-main-leave-type" class="mt-1 w-full p-2 text-sm bg-white border border-teal-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500"></select>
-                </label>
-                <label class="text-xs font-semibold text-gray-600">
-                    ประเภทการลา
-                    <select id="heatmap-leave-type" class="mt-1 w-full p-2 text-sm bg-white border border-teal-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500"></select>
                 </label>
                 <label class="text-xs font-semibold text-gray-600">
                     หน่วยงาน
@@ -614,7 +458,7 @@
                     ตำแหน่ง
                     <select id="heatmap-position" class="mt-1 w-full p-2 text-sm bg-white border border-teal-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500"></select>
                 </label>
-                <div class="rounded-lg border border-teal-100 bg-teal-50 p-3 text-xs text-teal-800 md:col-span-2 xl:col-span-5">
+                <div class="rounded-lg border border-teal-100 bg-teal-50 p-3 text-xs text-teal-800">
                     นับตามจำนวนวันที่มีคำขอเวรในระบบ สีเข้มหมายถึงขอบ่อยกว่า
                 </div>
             </div>
@@ -694,8 +538,8 @@
                 </button>
             </div>
             <div id="monthly-action-detail" class="rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700"></div>
-            <div class="mt-4 grid grid-cols-3 gap-2">
-                <button id="btn-monthly-action-approve" class="hidden rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700">
+            <div class="mt-4 grid grid-cols-2 gap-2">
+                <button id="btn-monthly-action-approve" class="hidden col-span-2 rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700">
                     <i class="fa-solid fa-circle-check mr-1"></i> อนุมัติ
                 </button>
                 <button id="btn-monthly-action-edit" class="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
@@ -752,7 +596,7 @@
         let activeDatePickerField = null;
         let activeDatePickerMonth = null;
         // Paste the deployed Google Apps Script Web App URL here to save requests to the target Google Sheet.
-        const GOOGLE_SHEET_LOG_URL = 'https://script.google.com/macros/s/AKfycbxyljunFfbu8q_ahLUNeyp_p2OyWN1YQX8mugsjQU4DHm6yFgkktygG5Bb6Fzao4HFq/exec';
+        const GOOGLE_SHEET_LOG_URL = 'https://script.google.com/macros/s/AKfycbxRzmjyXnmJrFF7_YoWmOs_6lt4pGRGz9toE1lkddX1dEnUs1z-exsB4vteAH6onMGc/exec';
         const requestToday = new Date();
         requestToday.setHours(0, 0, 0, 0);
         let currentDate = new Date(requestToday.getFullYear(), requestToday.getMonth(), 1);
@@ -846,7 +690,6 @@
             renderAdminReserveQueue();
             renderLevelLegend();
             renderCalendar();
-            showAdminHeatmapView();
             startRealtimeSync();
         });
 
@@ -1054,11 +897,9 @@
             document.getElementById('admin-section').classList.toggle('hidden', currentRole !== 'admin');
             document.getElementById('request-panel').classList.toggle('hidden', currentRole === 'admin');
             if (currentRole !== 'admin') {
-                setAdminReportSidebarVisible(false);
                 document.getElementById('request-panel').classList.remove('hidden');
                 showCalendarView();
             } else {
-                setAdminReportSidebarVisible(true);
                 showAdminHeatmapView();
             }
             applyDateLimits();
@@ -1070,7 +911,6 @@
         }
 
         function showCalendarView() {
-            setDashboardReportMode(false);
             document.getElementById('request-panel').classList.remove('hidden');
             document.getElementById('user-info-box').classList.remove('hidden');
             document.getElementById('form-section').classList.remove('hidden');
@@ -1089,16 +929,11 @@
             document.getElementById('admin-cancel-view').classList.remove('xl:col-span-3');
             document.getElementById('admin-duty-roster-view').classList.add('hidden');
             document.getElementById('admin-duty-roster-view').classList.remove('xl:col-span-3');
-            document.getElementById('admin-late-view').classList.add('hidden');
-            document.getElementById('admin-late-view').classList.remove('xl:col-span-3');
-            setAdminReportSidebarVisible(currentRole === 'admin');
-            setAdminReportSidebarActive('');
             showFirstAllowedUserMonth();
             renderCalendar();
         }
 
         function showAdminManagementView() {
-            setDashboardReportMode(false);
             document.getElementById('request-panel').classList.add('hidden');
             document.getElementById('calendar-view').classList.add('hidden');
             document.getElementById('calendar-view').classList.remove('flex');
@@ -1112,20 +947,14 @@
             document.getElementById('admin-cancel-view').classList.remove('xl:col-span-3');
             document.getElementById('admin-duty-roster-view').classList.add('hidden');
             document.getElementById('admin-duty-roster-view').classList.remove('xl:col-span-3');
-            document.getElementById('admin-late-view').classList.add('hidden');
-            document.getElementById('admin-late-view').classList.remove('xl:col-span-3');
-            setAdminReportSidebarVisible(true);
-            setAdminReportSidebarActive('');
             renderAdminSettings();
             renderAdminTable();
         }
 
         function showAdminHeatmapView() {
-            setDashboardReportMode(true);
             document.getElementById('request-panel').classList.add('hidden');
             document.getElementById('calendar-view').classList.add('hidden');
             document.getElementById('calendar-view').classList.remove('flex');
-            document.getElementById('admin-section').classList.add('hidden');
             document.getElementById('admin-management-view').classList.add('hidden');
             document.getElementById('admin-management-view').classList.remove('xl:col-span-3');
             document.getElementById('admin-heatmap-view').classList.remove('hidden');
@@ -1136,15 +965,10 @@
             document.getElementById('admin-cancel-view').classList.remove('xl:col-span-3');
             document.getElementById('admin-duty-roster-view').classList.add('hidden');
             document.getElementById('admin-duty-roster-view').classList.remove('xl:col-span-3');
-            document.getElementById('admin-late-view').classList.add('hidden');
-            document.getElementById('admin-late-view').classList.remove('xl:col-span-3');
-            setAdminReportSidebarVisible(true);
-            setAdminReportSidebarActive('leave-summary');
             renderAdminHeatmap();
         }
 
         function showAdminPendingView() {
-            setDashboardReportMode(false);
             document.getElementById('request-panel').classList.add('hidden');
             document.getElementById('calendar-view').classList.add('hidden');
             document.getElementById('calendar-view').classList.remove('flex');
@@ -1158,15 +982,10 @@
             document.getElementById('admin-cancel-view').classList.remove('xl:col-span-3');
             document.getElementById('admin-duty-roster-view').classList.add('hidden');
             document.getElementById('admin-duty-roster-view').classList.remove('xl:col-span-3');
-            document.getElementById('admin-late-view').classList.add('hidden');
-            document.getElementById('admin-late-view').classList.remove('xl:col-span-3');
-            setAdminReportSidebarVisible(true);
-            setAdminReportSidebarActive('');
             renderAdminReserveQueue();
         }
 
         function showAdminCancelView() {
-            setDashboardReportMode(false);
             document.getElementById('request-panel').classList.add('hidden');
             document.getElementById('calendar-view').classList.add('hidden');
             document.getElementById('calendar-view').classList.remove('flex');
@@ -1180,15 +999,10 @@
             document.getElementById('admin-cancel-view').classList.add('xl:col-span-3');
             document.getElementById('admin-duty-roster-view').classList.add('hidden');
             document.getElementById('admin-duty-roster-view').classList.remove('xl:col-span-3');
-            document.getElementById('admin-late-view').classList.add('hidden');
-            document.getElementById('admin-late-view').classList.remove('xl:col-span-3');
-            setAdminReportSidebarVisible(true);
-            setAdminReportSidebarActive('');
             renderAdminCancelQueue();
         }
 
         function showAdminDutyRosterView() {
-            setDashboardReportMode(false);
             document.getElementById('request-panel').classList.add('hidden');
             document.getElementById('calendar-view').classList.add('hidden');
             document.getElementById('calendar-view').classList.remove('flex');
@@ -1202,57 +1016,23 @@
             document.getElementById('admin-cancel-view').classList.remove('xl:col-span-3');
             document.getElementById('admin-duty-roster-view').classList.remove('hidden');
             document.getElementById('admin-duty-roster-view').classList.add('xl:col-span-3');
-            document.getElementById('admin-late-view').classList.add('hidden');
-            document.getElementById('admin-late-view').classList.remove('xl:col-span-3');
-            setAdminReportSidebarVisible(true);
-            setAdminReportSidebarActive('');
-        }
-
-        function setAdminReportSidebarVisible(isVisible) {
-            const sidebar = document.getElementById('admin-report-sidebar');
-            if (!sidebar) return;
-            sidebar.classList.toggle('hidden', !isVisible);
-            document.body.classList.toggle('admin-report-sidebar-visible', isVisible);
-        }
-
-        function setDashboardReportMode(isVisible) {
-            document.body.classList.toggle('dashboard-report-visible', isVisible);
-        }
-
-        function setAdminReportSidebarActive(activeView) {
-            const leaveButton = document.getElementById('btn-sidebar-leave-summary');
-            const lateButton = document.getElementById('btn-sidebar-late');
-            if (!leaveButton || !lateButton) return;
-            leaveButton.classList.toggle('active', activeView === 'leave-summary');
-            lateButton.classList.toggle('active', activeView === 'late');
-        }
-
-        function showAdminLateView() {
-            setDashboardReportMode(true);
-            document.getElementById('request-panel').classList.add('hidden');
-            document.getElementById('calendar-view').classList.add('hidden');
-            document.getElementById('calendar-view').classList.remove('flex');
-            document.getElementById('admin-section').classList.add('hidden');
-            document.getElementById('admin-management-view').classList.add('hidden');
-            document.getElementById('admin-management-view').classList.remove('xl:col-span-3');
-            document.getElementById('admin-heatmap-view').classList.add('hidden');
-            document.getElementById('admin-heatmap-view').classList.remove('xl:col-span-3');
-            document.getElementById('admin-pending-view').classList.add('hidden');
-            document.getElementById('admin-pending-view').classList.remove('xl:col-span-3');
-            document.getElementById('admin-cancel-view').classList.add('hidden');
-            document.getElementById('admin-cancel-view').classList.remove('xl:col-span-3');
-            document.getElementById('admin-duty-roster-view').classList.add('hidden');
-            document.getElementById('admin-duty-roster-view').classList.remove('xl:col-span-3');
-            document.getElementById('admin-late-view').classList.remove('hidden');
-            document.getElementById('admin-late-view').classList.add('xl:col-span-3');
-            setAdminReportSidebarVisible(true);
-            setAdminReportSidebarActive('late');
-            renderLateSummary();
         }
 
         function setupEventListeners() {
-            const roleToggleButton = document.getElementById('btn-toggle-role');
-            if (roleToggleButton) roleToggleButton.classList.add('hidden');
+            document.getElementById('btn-toggle-role').addEventListener('click', async () => {
+                if (currentRole === 'user') {
+                    const password = await requestAdminPassword();
+                    if (!password) return;
+                    const adminCheck = await verifyAdminPassword(password);
+                    if (!adminCheck.ok) {
+                        alert(adminCheck.message);
+                        return;
+                    }
+                    setRole('admin');
+                } else {
+                    setRole('user');
+                }
+            });
 
             document.getElementById('btn-prev-month').addEventListener('click', () => {
                 currentDate.setMonth(currentDate.getMonth() - 1);
@@ -1295,23 +1075,9 @@
             document.getElementById('btn-admin-duty-roster').addEventListener('click', () => {
                 showAdminDutyRosterView();
             });
-            document.getElementById('btn-sidebar-leave-summary').addEventListener('click', () => {
-                showAdminHeatmapView();
-            });
-            document.getElementById('btn-sidebar-late').addEventListener('click', () => {
-                showAdminLateView();
-            });
             document.getElementById('heatmap-fiscal-year').addEventListener('change', () => {
                 resetHeatmapPagination();
                 renderAdminHeatmap(false, true);
-            });
-            document.getElementById('heatmap-main-leave-type').addEventListener('change', () => {
-                resetHeatmapPagination();
-                renderAdminHeatmap(false);
-            });
-            document.getElementById('heatmap-leave-type').addEventListener('change', () => {
-                resetHeatmapPagination();
-                renderAdminHeatmap(false);
             });
             document.getElementById('heatmap-department').addEventListener('change', () => {
                 resetHeatmapPagination();
@@ -1640,13 +1406,6 @@
             ));
             if (samePositionMatch) return samePositionMatch;
 
-            const sameNamePositionLevelMatch = users.find((user) => (
-                normalizeName(user.name) === normalizeName(record.name)
-                && (!record.position || user.position === record.position)
-                && (!record.level || user.level === record.level)
-            ));
-            if (sameNamePositionLevelMatch) return sameNamePositionLevelMatch;
-
             const nameMatches = users.filter((user) => normalizeName(user.name) === normalizeName(record.name));
             if (nameMatches.length === 1) return nameMatches[0];
 
@@ -1673,10 +1432,9 @@
                         startDate,
                         endDate,
                         dates: getDateRange(startDate, endDate),
-                        mainLeaveType: String(request.mainLeaveType || request.department || '').trim(),
-                        department: user ? user.department : '',
-                        position: user ? user.position : (request.position || ''),
-                        level: user ? user.level : (request.level || ''),
+                        department: request.department || (user ? user.department : ''),
+                        position: request.position || (user ? user.position : ''),
+                        level: request.level || (user ? user.level : ''),
                         leaveType: request.leaveType || '',
                         trainingNote: request.trainingNote || '',
                         status,
@@ -1693,7 +1451,6 @@
                 request.userId,
                 request.startDate,
                 request.endDate,
-                request.mainLeaveType,
                 request.status,
                 request.leaveType,
                 request.trainingNote
@@ -1720,9 +1477,6 @@
             if (!document.getElementById('admin-heatmap-view').classList.contains('hidden')) {
                 renderAdminHeatmap(false);
             }
-            if (!document.getElementById('admin-late-view').classList.contains('hidden')) {
-                renderLateSummary();
-            }
             return true;
         }
 
@@ -1748,60 +1502,6 @@
             const timeText = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             status.className = 'text-xs bg-emerald-600 px-3 py-1.5 rounded-full';
             status.innerText = `Realtime: ${requestCount} รายการ • ${timeText}`;
-        }
-
-        function isLateRequest(request) {
-            const mainTypeText = String(request.mainLeaveType || request.department || '').trim();
-            const leaveTypeText = String(request.leaveType || '').trim();
-            return mainTypeText.includes('สาย') || leaveTypeText.includes('สาย');
-        }
-
-        function renderLateSummary() {
-            const container = document.getElementById('late-summary-list');
-            const countBox = document.getElementById('late-summary-count');
-            if (!container || !countBox) return;
-
-            const lateRequests = shiftRequests
-                .filter(isLateRequest)
-                .sort((a, b) => getRequestTimeValue(b) - getRequestTimeValue(a));
-
-            countBox.innerText = `${lateRequests.length} รายการ`;
-
-            if (!lateRequests.length) {
-                container.innerHTML = '<div class="p-4 text-sm text-gray-500">ยังไม่มีข้อมูลสายจากคอลัมน์ B ของปีงบ</div>';
-                return;
-            }
-
-            container.innerHTML = `
-                <div class="overflow-x-auto">
-                    <table class="min-w-[820px] w-full text-left text-sm">
-                        <thead class="bg-gray-50 text-xs text-gray-500">
-                            <tr>
-                                <th class="p-3">ชื่อ</th>
-                                <th class="p-3">ประเภทหลัก</th>
-                                <th class="p-3">ตำแหน่ง</th>
-                                <th class="p-3">Level</th>
-                                <th class="p-3">รายการ</th>
-                                <th class="p-3">วันที่</th>
-                                <th class="p-3">สถานะ</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${lateRequests.map((request) => `
-                                <tr class="border-t border-gray-100">
-                                    <td class="p-3 font-semibold text-gray-700">${request.name || '-'}</td>
-                                    <td class="p-3 text-gray-600">${request.mainLeaveType || request.department || '-'}</td>
-                                    <td class="p-3 text-gray-600">${request.position || '-'}</td>
-                                    <td class="p-3 text-gray-600">${request.level || '-'}</td>
-                                    <td class="p-3 text-gray-600">${request.leaveType || '-'}</td>
-                                    <td class="p-3 text-gray-600">${getRequestDateText(request)}</td>
-                                    <td class="p-3 text-gray-600">${request.status === 'Pending' ? 'รออนุมัติ' : 'อนุมัติแล้ว'}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
         }
 
         function scheduleRealtimeRefresh() {
@@ -2400,11 +2100,8 @@
             alert('ยืนยันคำขอยกเลิกเรียบร้อยแล้ว');
             renderCalendar();
             renderAdminReserveQueue();
-            if (!document.getElementById('admin-heatmap-view').classList.contains('hidden')) {
+            if (!document.getElementById('admin-heatmap').classList.contains('hidden')) {
                 renderAdminHeatmap(false);
-            }
-            if (!document.getElementById('admin-late-view').classList.contains('hidden')) {
-                renderLateSummary();
             }
         }
 
@@ -3190,53 +2887,6 @@
                 : String(years.includes(firstAllowedFiscalYear) ? firstAllowedFiscalYear : years[0]);
         }
 
-        function getHeatmapMainLeaveTypes(fiscalYear) {
-            return [...new Set(shiftRequests
-                .filter((request) => !fiscalYear || getRequestDates(request).some((date) => getFiscalYearFromDate(date) === fiscalYear))
-                .map((request) => request.mainLeaveType)
-                .filter(Boolean))]
-                .sort((a, b) => a.localeCompare(b, 'th'));
-        }
-
-        function renderHeatmapMainLeaveTypeOptions(fiscalYear) {
-            const select = document.getElementById('heatmap-main-leave-type');
-            if (!select) return;
-            const previousValue = select.value;
-            const mainLeaveTypes = getHeatmapMainLeaveTypes(fiscalYear);
-            select.innerHTML = [
-                '<option value="">ทุกประเภทหลักลา</option>',
-                ...mainLeaveTypes.map((mainLeaveType) => `<option value="${mainLeaveType}">${mainLeaveType}</option>`)
-            ].join('');
-            select.value = mainLeaveTypes.includes(previousValue) ? previousValue : '';
-        }
-
-        function getHeatmapLeaveTypes(fiscalYear, mainLeaveType = '') {
-            return [...new Set(shiftRequests
-                .filter((request) => (
-                    (!fiscalYear || getRequestDates(request).some((date) => getFiscalYearFromDate(date) === fiscalYear))
-                    && (!mainLeaveType || request.mainLeaveType === mainLeaveType)
-                ))
-                .map((request) => request.leaveType)
-                .filter(Boolean))]
-                .sort((a, b) => a.localeCompare(b, 'th'));
-        }
-
-        function renderHeatmapLeaveTypeOptions(fiscalYear, mainLeaveType = '') {
-            const select = document.getElementById('heatmap-leave-type');
-            if (!select) return;
-            const previousValue = select.value;
-            const availableLeaveTypes = getHeatmapLeaveTypes(fiscalYear, mainLeaveType);
-            const orderedLeaveTypes = [
-                ...leaveTypes.filter((leaveType) => availableLeaveTypes.includes(leaveType)),
-                ...availableLeaveTypes.filter((leaveType) => !leaveTypes.includes(leaveType))
-            ];
-            select.innerHTML = [
-                '<option value="">ทุกประเภทการลา</option>',
-                ...orderedLeaveTypes.map((leaveType) => `<option value="${leaveType}">${leaveType}</option>`)
-            ].join('');
-            select.value = orderedLeaveTypes.includes(previousValue) ? previousValue : '';
-        }
-
         function renderHeatmapDepartmentOptions() {
             const select = document.getElementById('heatmap-department');
             if (!select) return;
@@ -3428,6 +3078,8 @@
 
         function closeMonthlyActionModal() {
             selectedMonthlyRequestId = null;
+            const approveButton = document.getElementById('btn-monthly-action-approve');
+            if (approveButton) approveButton.classList.add('hidden');
             document.getElementById('monthly-action-modal').classList.add('hidden');
         }
 
@@ -3449,14 +3101,13 @@
             const approveButton = document.getElementById('btn-monthly-action-approve');
             if (approveButton) {
                 const isPending = request.status === 'Pending';
-                approveButton.classList.toggle('hidden', !isPending);
                 approveButton.className = isPending
                     ? request.leaveType === 'ยกเลิก'
-                        ? 'rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700'
-                        : 'rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700'
-                    : 'hidden rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700';
+                        ? 'col-span-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700'
+                        : 'col-span-2 rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700'
+                    : 'hidden col-span-2 rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700';
                 approveButton.innerHTML = request.leaveType === 'ยกเลิก'
-                    ? '<i class="fa-solid fa-circle-check mr-1"></i> ยืนยัน'
+                    ? '<i class="fa-solid fa-circle-check mr-1"></i> ยืนยันยกเลิก'
                     : '<i class="fa-solid fa-circle-check mr-1"></i> อนุมัติ';
             }
             document.getElementById('monthly-action-detail').innerHTML = `
@@ -3676,10 +3327,6 @@
             heatmapDetailCache = {};
 
             const fiscalYear = Number(document.getElementById('heatmap-fiscal-year').value);
-            renderHeatmapMainLeaveTypeOptions(fiscalYear);
-            const selectedMainLeaveType = document.getElementById('heatmap-main-leave-type').value;
-            renderHeatmapLeaveTypeOptions(fiscalYear, selectedMainLeaveType);
-            const selectedLeaveType = document.getElementById('heatmap-leave-type').value;
             const selectedDepartment = document.getElementById('heatmap-department').value;
             const selectedPosition = document.getElementById('heatmap-position').value;
             const selectedMonth = document.getElementById('heatmap-month').value;
@@ -3692,6 +3339,7 @@
                     isSameRequestUser(request, user)
                     || (
                     normalizeName(user.name) === normalizeName(request.name)
+                    && (!request.department || request.department === user.department)
                     && (!request.position || request.position === user.position)
                     )
                 ));
@@ -3699,8 +3347,6 @@
                 .flatMap((request) => getRequestDates(request).map((date) => ({ request, date })))
                 .filter((entry) => (
                     getFiscalYearFromDate(entry.date) === fiscalYear
-                    && (!selectedMainLeaveType || entry.request.mainLeaveType === selectedMainLeaveType)
-                    && (!selectedLeaveType || entry.request.leaveType === selectedLeaveType)
                     && matchesFilteredUser(entry.request)
                 ));
             const approvedEntries = entries.filter(({ request }) => request.status === 'Approved');
@@ -3718,20 +3364,8 @@
                 });
             });
 
-            const findStatsForRequest = (request) => {
-                const requestIdentityKey = getRequestUserIdentityKey(request);
-                if (userStats.has(requestIdentityKey)) return userStats.get(requestIdentityKey);
-                const requestName = normalizeName(request.name);
-                const fallbackUser = filteredUsers.find((user) => (
-                    normalizeName(user.name) === requestName
-                    && (!request.position || user.position === request.position)
-                    && (!request.level || user.level === request.level)
-                )) || filteredUsers.find((user) => normalizeName(user.name) === requestName);
-                return fallbackUser ? userStats.get(getUserIdentityKey(fallbackUser)) : null;
-            };
-
             approvedEntries.forEach(({ request, date }) => {
-                const stats = findStatsForRequest(request);
+                const stats = userStats.get(getRequestUserIdentityKey(request));
                 if (!stats) return;
                 const monthKey = date.slice(0, 7);
                 stats.monthCounts[monthKey] = (stats.monthCounts[monthKey] || 0) + 1;
@@ -3743,7 +3377,7 @@
             });
 
             approvedEntries.forEach(({ request, date }) => {
-                const stats = findStatsForRequest(request);
+                const stats = userStats.get(getRequestUserIdentityKey(request));
                 if (!stats) return;
                 const leaveType = request.leaveType || '-';
                 leaveTypeCounts[leaveType] = (leaveTypeCounts[leaveType] || 0) + 1;
@@ -3883,4 +3517,3 @@
     </script>
 </body>
 </html>
-
