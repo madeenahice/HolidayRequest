@@ -815,6 +815,10 @@
             return (input.min && dateStr < input.min) || (input.max && dateStr > input.max);
         }
 
+        function isCancelLeaveTypeSelected() {
+            return document.getElementById('form-leave-type')?.value === 'ยกเลิก';
+        }
+
         function renderThaiDatePicker() {
             if (!activeDatePickerMonth) return;
             const monthNames = [
@@ -862,7 +866,7 @@
         function applyDateLimits() {
             const startInput = document.getElementById('form-start-date');
             const endInput = document.getElementById('form-end-date');
-            if (currentRole === 'admin') {
+            if (currentRole === 'admin' || isCancelLeaveTypeSelected()) {
                 startInput.removeAttribute('min');
                 startInput.removeAttribute('max');
                 endInput.removeAttribute('max');
@@ -1056,6 +1060,10 @@
             document.getElementById('form-position-select').addEventListener('change', () => {
                 renderUserDropdowns();
                 renderCalendar();
+            });
+            document.getElementById('form-leave-type').addEventListener('change', () => {
+                applyDateLimits();
+                updateRequestDateDisplays();
             });
             document.getElementById('btn-admin-calendar').addEventListener('click', () => {
                 showCalendarView();
@@ -1687,6 +1695,42 @@
             return dates;
         }
 
+        function groupConsecutiveDateRanges(dates = []) {
+            const uniqueDates = [...new Set(dates)].sort();
+            if (!uniqueDates.length) return [];
+
+            const ranges = [];
+            let currentDates = [uniqueDates[0]];
+            for (let index = 1; index < uniqueDates.length; index += 1) {
+                const previousDate = new Date(`${uniqueDates[index - 1]}T00:00:00`);
+                previousDate.setDate(previousDate.getDate() + 1);
+                if (formatDateInput(previousDate) === uniqueDates[index]) {
+                    currentDates.push(uniqueDates[index]);
+                } else {
+                    ranges.push({
+                        startDate: currentDates[0],
+                        endDate: currentDates[currentDates.length - 1],
+                        dates: currentDates
+                    });
+                    currentDates = [uniqueDates[index]];
+                }
+            }
+            ranges.push({
+                startDate: currentDates[0],
+                endDate: currentDates[currentDates.length - 1],
+                dates: currentDates
+            });
+            return ranges;
+        }
+
+        function createUniqueRequestId() {
+            let id = Date.now();
+            while (shiftRequests.some((request) => String(request.id) === String(id))) {
+                id += 1;
+            }
+            return id;
+        }
+
         function isWeekend(dateStr) {
             const day = new Date(`${dateStr}T00:00:00`).getDay();
             return day === 0 || day === 6;
@@ -1861,7 +1905,7 @@
                 id: cancelRequest.userId,
                 name: cancelRequest.name
             };
-            return shiftRequests.filter((request) => (
+            const matchedRequests = shiftRequests.filter((request) => (
                 request.id !== cancelRequest.id
                 && request.status === 'Approved'
                 && request.leaveType !== 'ยกเลิก'
@@ -1869,8 +1913,10 @@
                     (cancelRequest.userId && isSameRequestUser(request, cancelUser))
                     || (!cancelRequest.userId && cancelName && normalizeName(request.name) === cancelName)
                 )
-                && getRequestDates(request).every((date) => cancelDates.includes(date))
+                && getRequestDates(request).some((date) => cancelDates.includes(date))
             ));
+            const coveredDates = new Set(matchedRequests.flatMap((request) => getRequestDates(request)));
+            return cancelDates.every((date) => coveredDates.has(date)) ? matchedRequests : [];
         }
 
         function handleShiftRequest() {
@@ -1896,7 +1942,7 @@
                     dates: requestedDates
                 };
                 if (!getApprovedRequestsForCancel(cancelDraft).length) {
-                    alert('ไม่พบเวรเดิมที่อนุมัติแล้วและอยู่ครบในช่วงวันที่เลือก กรุณาเลือกวันที่ให้ครอบคลุมคำขอเดิมก่อนส่งคำขอยกเลิก');
+                    alert('ไม่พบเวรเดิมที่อนุมัติแล้วครบทุกวันที่ต้องการยกเลิก กรุณาเลือกเฉพาะวันที่มีเวรเดิมที่อนุมัติแล้ว');
                     return;
                 }
                 const duplicateCancel = shiftRequests.some((request) => (
@@ -1917,7 +1963,7 @@
                 }
 
                 const newRequest = {
-                    id: Date.now(),
+                    id: createUniqueRequestId(),
                     userId: user.id,
                     name: user.name,
                     startDate,
@@ -2000,7 +2046,7 @@
             const isQuotaAvailable = requestedDates.every((date) => getApprovedCount(date, user.department, user.position, user.level) < quotaLimit);
             if (isQuotaAvailable) {
                 const newRequest = {
-                    id: Date.now(),
+                    id: createUniqueRequestId(),
                     userId: user.id,
                     name: user.name,
                     startDate,
@@ -2041,7 +2087,7 @@
         function saveReserveShift() {
             if (!pendingReserveData) return;
             const newRequest = {
-                id: Date.now(),
+                id: createUniqueRequestId(),
                 userId: pendingReserveData.userId,
                 name: pendingReserveData.name,
                 startDate: pendingReserveData.startDate,
@@ -2089,14 +2135,42 @@
                 return;
             }
 
+            const cancelDateSet = new Set(getRequestDates(cancelRequest));
+            const deletedRequestIds = new Set([String(cancelRequest.id)]);
             matchedRequests.forEach((request) => {
-                logAction('DELETE_REQUEST', { ...getRequestLogDetail(request), status: 'cancle' });
+                const remainingRanges = groupConsecutiveDateRanges(
+                    getRequestDates(request).filter((date) => !cancelDateSet.has(date))
+                );
+
+                if (!remainingRanges.length) {
+                    deletedRequestIds.add(String(request.id));
+                    logAction('DELETE_REQUEST', { ...getRequestLogDetail(request), status: 'cancle' });
+                    return;
+                }
+
+                const [firstRange, ...extraRanges] = remainingRanges;
+                request.startDate = firstRange.startDate;
+                request.endDate = firstRange.endDate;
+                request.dates = firstRange.dates;
+                delete request.date;
+                logAction('EDIT_REQUEST_DATES', getRequestLogDetail(request));
+
+                extraRanges.forEach((range) => {
+                    const splitRequest = {
+                        ...request,
+                        id: createUniqueRequestId(),
+                        startDate: range.startDate,
+                        endDate: range.endDate,
+                        dates: range.dates,
+                        status: 'Approved',
+                        timestamp: new Date()
+                    };
+                    shiftRequests.push(splitRequest);
+                    logAction('CREATE_APPROVED_REQUEST', getRequestLogDetail(splitRequest));
+                });
             });
             logAction('DELETE_REQUEST', { ...getRequestLogDetail(cancelRequest), status: 'cancle' });
-            shiftRequests = shiftRequests.filter((request) => (
-                request.id !== cancelRequest.id
-                && !matchedRequests.some((matchedRequest) => matchedRequest.id === request.id)
-            ));
+            shiftRequests = shiftRequests.filter((request) => !deletedRequestIds.has(String(request.id)));
             alert('ยืนยันคำขอยกเลิกเรียบร้อยแล้ว');
             renderCalendar();
             renderAdminReserveQueue();
