@@ -1493,7 +1493,8 @@
                 request.endDate,
                 request.status,
                 request.leaveType,
-                request.trainingNote
+                request.trainingNote,
+                getRequestTimestamp(request)
             ]));
         }
 
@@ -1623,7 +1624,7 @@
                     writeAction: action,
                     detail: JSON.stringify(detail),
                     role: currentRole,
-                    timestamp: payload.timestamp
+                    timestamp: detail.timestamp || payload.timestamp
                 }, 20000);
 
                 if (response && response.ok) {
@@ -1765,6 +1766,9 @@
 
         function getRequestLogDetail(request) {
             const user = findUserById(request.userId, request.name);
+            const timestamp = request.timestamp instanceof Date
+                ? request.timestamp.toISOString()
+                : (request.timestamp || new Date().toISOString());
             return {
                 requestId: request.id,
                 userId: request.userId,
@@ -1777,7 +1781,8 @@
                 startDate: request.startDate || request.date,
                 endDate: request.endDate || request.date,
                 dateText: getRequestDateText(request),
-                status: request.status
+                status: request.status,
+                timestamp
             };
         }
 
@@ -1879,10 +1884,17 @@
             return Number.isNaN(timestamp) ? 0 : timestamp;
         }
 
+        function compareRequestIds(a, b) {
+            const idA = Number(a.id);
+            const idB = Number(b.id);
+            if (!Number.isNaN(idA) && !Number.isNaN(idB)) return idA - idB;
+            return String(a.id || '').localeCompare(String(b.id || ''), 'th', { numeric: true });
+        }
+
         function compareRequestsByLevelThenTime(a, b) {
             return getLevelOrder(b.level) - getLevelOrder(a.level)
                 || getRequestTimestamp(a) - getRequestTimestamp(b)
-                || a.id - b.id;
+                || compareRequestIds(a, b);
         }
 
         function getRequestColorStyle(request) {
@@ -2850,10 +2862,12 @@
                         dayDiv.title = 'วันเสาร์-อาทิตย์';
                     }
 
-                    const dayRequests = shiftRequests.filter((request) => (
-                        getRequestDates(request).includes(fullDateStr)
-                        && matchesCalendarFilters(request)
-                    ));
+                    const dayRequests = shiftRequests
+                        .filter((request) => (
+                            getRequestDates(request).includes(fullDateStr)
+                            && matchesCalendarFilters(request)
+                        ))
+                        .sort(compareRequestsByLevelThenTime);
                     const dayTooltip = dayRequests.map(getRequestTooltip).join('\n');
                     if (dayTooltip) {
                         dayDiv.title = dayDiv.title ? `${dayDiv.title}\n${dayTooltip}` : dayTooltip;
