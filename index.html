@@ -612,8 +612,15 @@
         let realtimeTimerId = null;
         let holidaySyncTimerId = null;
         let realtimeRefreshTimerId = null;
+        let transientStatusTimerId = null;
         let lastRealtimeSignature = '';
         let lastPublicHolidaySignature = '';
+        let lastRealtimeConnected = false;
+        let lastRealtimeCount = 0;
+        let transientStatusUntil = 0;
+        const REALTIME_POLL_MIN_MS = 15000;
+        const REALTIME_POLL_MAX_MS = 30000;
+        const WRITE_RETRY_DELAYS_MS = [0, 1200, 3000, 6000];
 
         const levelColors = {
             'Level 1': { bg: 'bg-sky-50 text-sky-700 border-sky-200', dot: 'bg-sky-500' },
@@ -1050,7 +1057,10 @@
 
             document.getElementById('shift-form').addEventListener('submit', (e) => {
                 e.preventDefault();
-                handleShiftRequest();
+                handleShiftRequest().catch((error) => {
+                    console.warn('Cannot submit shift request', error);
+                    showTransientStatus('บันทึกล้มเหลว: ระบบทำงานผิดพลาด', 'bg-red-600 text-white', 8000);
+                });
             });
             document.getElementById('form-department-select').addEventListener('change', () => {
                 renderPositionDropdowns();
@@ -1147,36 +1157,58 @@
                 document.getElementById('reserve-modal').classList.add('hidden');
                 pendingReserveData = null;
             });
-            document.getElementById('btn-reserve-confirm').addEventListener('click', saveReserveShift);
+            document.getElementById('btn-reserve-confirm').addEventListener('click', () => {
+                saveReserveShift().catch((error) => {
+                    console.warn('Cannot save reserve shift', error);
+                    showTransientStatus('บันทึกล้มเหลว: ระบบทำงานผิดพลาด', 'bg-red-600 text-white', 8000);
+                });
+            });
             document.getElementById('btn-promote-skip').addEventListener('click', () => {
                 document.getElementById('promote-modal').classList.add('hidden');
                 pendingPromoteData = null;
             });
-            document.getElementById('btn-promote-confirm').addEventListener('click', executePromote);
+            document.getElementById('btn-promote-confirm').addEventListener('click', () => {
+                executePromote().catch((error) => {
+                    console.warn('Cannot promote reserve request', error);
+                    showTransientStatus('บันทึกล้มเหลว: ระบบทำงานผิดพลาด', 'bg-red-600 text-white', 8000);
+                });
+            });
             document.getElementById('btn-day-detail-close').addEventListener('click', () => {
                 document.getElementById('day-detail-modal').classList.add('hidden');
             });
             document.getElementById('btn-monthly-action-close').addEventListener('click', closeMonthlyActionModal);
-            document.getElementById('btn-monthly-action-approve').addEventListener('click', () => {
+            document.getElementById('btn-monthly-action-approve').addEventListener('click', async () => {
                 if (selectedMonthlyRequestId === null) return;
                 const requestId = selectedMonthlyRequestId;
                 closeMonthlyActionModal();
-                approveReserveRequest(requestId);
-                renderAdminHeatmap(false);
+                try {
+                    await approveReserveRequest(requestId);
+                    renderAdminHeatmap(false);
+                } catch (error) {
+                    handleAsyncActionError(error);
+                }
             });
-            document.getElementById('btn-monthly-action-edit').addEventListener('click', () => {
+            document.getElementById('btn-monthly-action-edit').addEventListener('click', async () => {
                 if (selectedMonthlyRequestId === null) return;
                 const requestId = selectedMonthlyRequestId;
                 closeMonthlyActionModal();
-                editShiftDates(requestId);
-                renderAdminHeatmap(false);
+                try {
+                    await editShiftDates(requestId);
+                    renderAdminHeatmap(false);
+                } catch (error) {
+                    handleAsyncActionError(error);
+                }
             });
-            document.getElementById('btn-monthly-action-delete').addEventListener('click', () => {
+            document.getElementById('btn-monthly-action-delete').addEventListener('click', async () => {
                 if (selectedMonthlyRequestId === null) return;
                 const requestId = selectedMonthlyRequestId;
                 closeMonthlyActionModal();
-                deleteShift(requestId);
-                renderAdminHeatmap(false);
+                try {
+                    await deleteShift(requestId);
+                    renderAdminHeatmap(false);
+                } catch (error) {
+                    handleAsyncActionError(error);
+                }
             });
         }
 
@@ -1238,7 +1270,7 @@
                 : normalizeUserId(request.userId);
         }
 
-        function requestAppsScriptJsonp(action, params = {}) {
+        function requestAppsScriptJsonp(action, params = {}, timeoutMs = 10000) {
             if (!GOOGLE_SHEET_LOG_URL) {
                 return Promise.resolve({ ok: false, message: 'ยังไม่ได้ตั้งค่า Google Apps Script Web App URL' });
             }
@@ -1249,7 +1281,7 @@
                 const timeoutId = setTimeout(() => {
                     cleanup();
                     resolve({ ok: false, message: 'เชื่อมต่อ Apps Script ไม่ได้ หรือ Web App ยังไม่ใช่เวอร์ชันล่าสุด' });
-                }, 10000);
+                }, timeoutMs);
 
                 function cleanup() {
                     clearTimeout(timeoutId);
@@ -1488,18 +1520,32 @@
             return true;
         }
 
+        function sleep(ms) {
+            return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+
+        function getRandomRealtimePollDelay() {
+            return REALTIME_POLL_MIN_MS + Math.floor(Math.random() * (REALTIME_POLL_MAX_MS - REALTIME_POLL_MIN_MS + 1));
+        }
+
+        function scheduleNextRealtimePoll(delay = getRandomRealtimePollDelay()) {
+            if (realtimeTimerId) clearTimeout(realtimeTimerId);
+            realtimeTimerId = setTimeout(async () => {
+                await loadShiftRequestsFromSheet();
+                scheduleNextRealtimePoll();
+            }, delay);
+        }
+
         function startRealtimeSync() {
-            if (realtimeTimerId) clearInterval(realtimeTimerId);
+            if (realtimeTimerId) clearTimeout(realtimeTimerId);
             if (holidaySyncTimerId) clearInterval(holidaySyncTimerId);
-            realtimeTimerId = setInterval(() => {
-                loadShiftRequestsFromSheet();
-            }, 5000);
+            scheduleNextRealtimePoll();
             holidaySyncTimerId = setInterval(() => {
                 loadPublicHolidaysFromSheet();
             }, 60000);
         }
 
-        function updateRealtimeStatus(isConnected, requestCount = shiftRequests.length) {
+        function renderRealtimeStatus(isConnected, requestCount = shiftRequests.length) {
             const status = document.getElementById('realtime-status');
             if (!status) return;
             if (!isConnected) {
@@ -1512,14 +1558,45 @@
             status.innerText = `Realtime: ${requestCount} รายการ • ${timeText}`;
         }
 
-        function scheduleRealtimeRefresh() {
-            clearTimeout(realtimeRefreshTimerId);
-            realtimeRefreshTimerId = setTimeout(() => {
-                loadShiftRequestsFromSheet();
-            }, 1500);
+        function updateRealtimeStatus(isConnected, requestCount = shiftRequests.length) {
+            lastRealtimeConnected = isConnected;
+            lastRealtimeCount = requestCount;
+            if (Date.now() < transientStatusUntil) return;
+            renderRealtimeStatus(isConnected, requestCount);
         }
 
-        function logAction(action, detail = {}) {
+        function showTransientStatus(text, className, durationMs = 4500) {
+            const status = document.getElementById('realtime-status');
+            if (!status) return;
+            clearTimeout(transientStatusTimerId);
+            transientStatusUntil = Date.now() + durationMs;
+            status.className = `text-xs px-3 py-1.5 rounded-full ${className}`;
+            status.innerText = text;
+            transientStatusTimerId = setTimeout(() => {
+                transientStatusUntil = 0;
+                renderRealtimeStatus(lastRealtimeConnected, lastRealtimeCount);
+            }, durationMs);
+        }
+
+        function handleAsyncActionError(error) {
+            console.warn('Shift request action failed', error);
+            showTransientStatus('บันทึกล้มเหลว: ระบบทำงานผิดพลาด', 'bg-red-600 text-white', 8000);
+        }
+
+        function scheduleRealtimeRefresh(delay = 600) {
+            clearTimeout(realtimeRefreshTimerId);
+            realtimeRefreshTimerId = setTimeout(async () => {
+                await loadShiftRequestsFromSheet();
+                scheduleNextRealtimePoll();
+            }, delay);
+        }
+
+        async function logAction(action, detail = {}, options = {}) {
+            const {
+                refresh = true,
+                successText = 'บันทึกสำเร็จ',
+                failureText = 'บันทึกล้มเหลว'
+            } = options;
             const payload = {
                 timestamp: new Date().toISOString(),
                 role: currentRole,
@@ -1529,19 +1606,39 @@
 
             if (!GOOGLE_SHEET_LOG_URL) {
                 console.log('[log]', payload);
-                return;
+                showTransientStatus(`${successText} (โหมดออฟไลน์)`, 'bg-emerald-600 text-white');
+                return true;
             }
 
-            fetch(GOOGLE_SHEET_LOG_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify(payload)
-            })
-                .then(() => scheduleRealtimeRefresh())
-                .catch((error) => {
-                    console.warn('Cannot write log to Google Sheet', error);
-                });
+            let lastErrorMessage = '';
+            for (let attempt = 0; attempt < WRITE_RETRY_DELAYS_MS.length; attempt += 1) {
+                if (WRITE_RETRY_DELAYS_MS[attempt] > 0) {
+                    showTransientStatus(`กำลังบันทึก... ลองใหม่ครั้งที่ ${attempt}`, 'bg-amber-500 text-white', 12000);
+                    await sleep(WRITE_RETRY_DELAYS_MS[attempt]);
+                } else {
+                    showTransientStatus('กำลังบันทึก...', 'bg-amber-500 text-white', 12000);
+                }
+
+                const response = await requestAppsScriptJsonp('syncRequest', {
+                    writeAction: action,
+                    detail: JSON.stringify(detail),
+                    role: currentRole,
+                    timestamp: payload.timestamp
+                }, 20000);
+
+                if (response && response.ok) {
+                    showTransientStatus(successText, 'bg-emerald-600 text-white');
+                    if (refresh) {
+                        await loadShiftRequestsFromSheet();
+                        scheduleNextRealtimePoll();
+                    }
+                    return true;
+                }
+                lastErrorMessage = response?.message || 'เชื่อมต่อ Google Sheet ไม่สำเร็จ';
+            }
+
+            showTransientStatus(`${failureText}: ${lastErrorMessage}`, 'bg-red-600 text-white', 8000);
+            return false;
         }
 
         function requestAdminPassword() {
@@ -1731,6 +1828,14 @@
             return id;
         }
 
+        function cloneShiftRequestsSnapshot() {
+            return shiftRequests.map((request) => ({
+                ...request,
+                dates: getRequestDates(request).slice(),
+                timestamp: request.timestamp instanceof Date ? new Date(request.timestamp) : request.timestamp
+            }));
+        }
+
         function isWeekend(dateStr) {
             const day = new Date(`${dateStr}T00:00:00`).getDay();
             return day === 0 || day === 6;
@@ -1860,8 +1965,8 @@
                     const adminActions = currentRole === 'admin'
                         ? `
                             <div class="mt-3 flex flex-wrap gap-2">
-                                <button onclick="editShiftDates(${request.id})" class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">แก้ไขวัน</button>
-                                <button onclick="deleteShift(${request.id})" class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700">ยกเลิก</button>
+                                <button onclick="editShiftDates(${request.id}).catch(handleAsyncActionError)" class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">แก้ไขวัน</button>
+                                <button onclick="deleteShift(${request.id}).catch(handleAsyncActionError)" class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700">ยกเลิก</button>
                             </div>
                         `
                         : '';
@@ -1919,7 +2024,7 @@
             return cancelDates.every((date) => coveredDates.has(date)) ? matchedRequests : [];
         }
 
-        function handleShiftRequest() {
+        async function handleShiftRequest() {
             const selectedUser = parseUserSelectValue(document.getElementById('form-user-select').value);
             const userId = selectedUser.id;
             const startDate = document.getElementById('form-start-date').value;
@@ -1977,8 +2082,19 @@
                     status: 'Pending',
                     timestamp: new Date()
                 };
+                const beforeRequests = cloneShiftRequestsSnapshot();
                 shiftRequests.push(newRequest);
-                logAction('CREATE_PENDING_REQUEST', getRequestLogDetail(newRequest));
+                const saved = await logAction('CREATE_PENDING_REQUEST', getRequestLogDetail(newRequest), {
+                    successText: 'ส่งคำขอยกเลิกสำเร็จ',
+                    failureText: 'ส่งคำขอยกเลิกไม่สำเร็จ'
+                });
+                if (!saved) {
+                    shiftRequests = beforeRequests;
+                    renderCalendar();
+                    renderAdminReserveQueue();
+                    alert('บันทึกคำขอยกเลิกลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
+                    return;
+                }
                 alert('ส่งคำขอยกเลิกให้ Admin ยืนยันแล้ว');
                 showCalendarMonth(startDate);
                 renderCalendar();
@@ -2060,8 +2176,19 @@
                     status: 'Approved',
                     timestamp: new Date()
                 };
+                const beforeRequests = cloneShiftRequestsSnapshot();
                 shiftRequests.push(newRequest);
-                logAction('CREATE_APPROVED_REQUEST', getRequestLogDetail(newRequest));
+                const saved = await logAction('CREATE_APPROVED_REQUEST', getRequestLogDetail(newRequest), {
+                    successText: 'บันทึกคำขอเวรสำเร็จ',
+                    failureText: 'บันทึกคำขอเวรไม่สำเร็จ'
+                });
+                if (!saved) {
+                    shiftRequests = beforeRequests;
+                    renderCalendar();
+                    renderAdminReserveQueue();
+                    alert('บันทึกคำขอเวรลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
+                    return;
+                }
                 alert('ยื่นคำขอเวรสำเร็จ (ได้รับโควตาแบบปกติ)');
             } else {
                 pendingReserveData = {
@@ -2084,7 +2211,7 @@
             renderAdminReserveQueue();
         }
 
-        function saveReserveShift() {
+        async function saveReserveShift() {
             if (!pendingReserveData) return;
             const newRequest = {
                 id: createUniqueRequestId(),
@@ -2101,33 +2228,55 @@
                 status: 'Pending',
                 timestamp: new Date()
             };
+            const beforeRequests = cloneShiftRequestsSnapshot();
             shiftRequests.push(newRequest);
-            logAction('CREATE_PENDING_REQUEST', getRequestLogDetail(newRequest));
+            const saved = await logAction('CREATE_PENDING_REQUEST', getRequestLogDetail(newRequest), {
+                successText: 'บันทึกตัวสำรองสำเร็จ',
+                failureText: 'บันทึกตัวสำรองไม่สำเร็จ'
+            });
+            if (!saved) {
+                shiftRequests = beforeRequests;
+                renderCalendar();
+                renderAdminReserveQueue();
+                alert('บันทึกตัวสำรองลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
+                return;
+            }
             document.getElementById('reserve-modal').classList.add('hidden');
             pendingReserveData = null;
             alert('บันทึกเป็นตัวสำรองเรียบร้อยแล้ว');
-            showCalendarMonth(shiftRequests[shiftRequests.length - 1].startDate);
+            showCalendarMonth(newRequest.startDate);
             renderCalendar();
             renderAdminReserveQueue();
         }
 
-        function approveReserveRequest(requestId) {
+        async function approveReserveRequest(requestId) {
             const target = shiftRequests.find((request) => request.id === requestId);
             if (!target) return;
             if (target.leaveType === 'ยกเลิก') {
-                approveCancelRequest(target);
+                await approveCancelRequest(target);
                 return;
             }
             const quotaLimit = getQuotaLimit(target.level);
             const canApproveAllDates = getRequestDates(target).every((date) => getApprovedCount(date, target.department, target.position, target.level) < quotaLimit);
+            const previousStatus = target.status;
             target.status = 'Approved';
-            logAction('APPROVE_PENDING_REQUEST', getRequestLogDetail(target));
+            const saved = await logAction('APPROVE_PENDING_REQUEST', getRequestLogDetail(target), {
+                successText: 'บันทึกการอนุมัติสำเร็จ',
+                failureText: 'บันทึกการอนุมัติไม่สำเร็จ'
+            });
+            if (!saved) {
+                target.status = previousStatus;
+                renderCalendar();
+                renderAdminReserveQueue();
+                alert('บันทึกการอนุมัติลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
+                return;
+            }
             alert(canApproveAllDates ? 'อนุมัติตัวสำรองเรียบร้อยแล้ว' : 'อนุมัติตัวสำรองเรียบร้อยแล้ว (Admin อนุมัติเกินโควต้า)');
             renderCalendar();
             renderAdminReserveQueue();
         }
 
-        function approveCancelRequest(cancelRequest) {
+        async function approveCancelRequest(cancelRequest) {
             const matchedRequests = getApprovedRequestsForCancel(cancelRequest);
 
             if (!matchedRequests.length) {
@@ -2135,6 +2284,8 @@
                 return;
             }
 
+            const beforeRequests = cloneShiftRequestsSnapshot();
+            const writeActions = [];
             const cancelDateSet = new Set(getRequestDates(cancelRequest));
             const deletedRequestIds = new Set([String(cancelRequest.id)]);
             matchedRequests.forEach((request) => {
@@ -2144,7 +2295,10 @@
 
                 if (!remainingRanges.length) {
                     deletedRequestIds.add(String(request.id));
-                    logAction('DELETE_REQUEST', { ...getRequestLogDetail(request), status: 'cancle' });
+                    writeActions.push({
+                        action: 'DELETE_REQUEST',
+                        detail: { ...getRequestLogDetail(request), status: 'cancle' }
+                    });
                     return;
                 }
 
@@ -2153,7 +2307,10 @@
                 request.endDate = firstRange.endDate;
                 request.dates = firstRange.dates;
                 delete request.date;
-                logAction('EDIT_REQUEST_DATES', getRequestLogDetail(request));
+                writeActions.push({
+                    action: 'EDIT_REQUEST_DATES',
+                    detail: getRequestLogDetail(request)
+                });
 
                 extraRanges.forEach((range) => {
                     const splitRequest = {
@@ -2166,11 +2323,36 @@
                         timestamp: new Date()
                     };
                     shiftRequests.push(splitRequest);
-                    logAction('CREATE_APPROVED_REQUEST', getRequestLogDetail(splitRequest));
+                    writeActions.push({
+                        action: 'CREATE_APPROVED_REQUEST',
+                        detail: getRequestLogDetail(splitRequest)
+                    });
                 });
             });
-            logAction('DELETE_REQUEST', { ...getRequestLogDetail(cancelRequest), status: 'cancle' });
+            writeActions.push({
+                action: 'DELETE_REQUEST',
+                detail: { ...getRequestLogDetail(cancelRequest), status: 'cancle' }
+            });
             shiftRequests = shiftRequests.filter((request) => !deletedRequestIds.has(String(request.id)));
+            for (const item of writeActions) {
+                const saved = await logAction(item.action, item.detail, {
+                    refresh: false,
+                    successText: 'บันทึกคำขอยกเลิกสำเร็จ',
+                    failureText: 'บันทึกคำขอยกเลิกไม่สำเร็จ'
+                });
+                if (!saved) {
+                    shiftRequests = beforeRequests;
+                    renderCalendar();
+                    renderAdminReserveQueue();
+                    if (!document.getElementById('admin-heatmap').classList.contains('hidden')) {
+                        renderAdminHeatmap(false);
+                    }
+                    alert('บันทึกคำขอยกเลิกลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
+                    return;
+                }
+            }
+            await loadShiftRequestsFromSheet();
+            scheduleNextRealtimePoll();
             alert('ยืนยันคำขอยกเลิกเรียบร้อยแล้ว');
             renderCalendar();
             renderAdminReserveQueue();
@@ -2179,7 +2361,7 @@
             }
         }
 
-        function cancelShiftAndCheckQueue(requestId) {
+        async function cancelShiftAndCheckQueue(requestId) {
             if (currentRole !== 'admin') {
                 alert('ผู้ใช้ทั่วไปไม่มีสิทธิ์ยกเลิกเวร กรุณาติดต่อแอดมิน');
                 return;
@@ -2194,7 +2376,15 @@
                 ? `ยืนยันลบคำขอยกเลิกวันที่ ${getRequestDateText(targetShift)} หรือไม่?`
                 : `ยืนยันลบคำขอเวรวันที่ ${getRequestDateText(targetShift)} หรือไม่?`;
             if (!confirm(confirmText)) return;
-            logAction('DELETE_REQUEST', { ...getRequestLogDetail(targetShift), status: 'cancle' });
+            const saved = await logAction('DELETE_REQUEST', { ...getRequestLogDetail(targetShift), status: 'cancle' }, {
+                refresh: false,
+                successText: 'บันทึกการลบสำเร็จ',
+                failureText: 'บันทึกการลบไม่สำเร็จ'
+            });
+            if (!saved) {
+                alert('บันทึกการลบลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
+                return;
+            }
             shiftRequests.splice(targetIndex, 1);
 
             if (targetShift.status === 'Approved') {
@@ -2222,18 +2412,31 @@
                 alert(isCancelRequest ? 'ลบคำขอยกเลิกออกเรียบร้อยแล้ว' : 'ลบคิวสำรองออกเรียบร้อยแล้ว');
             }
 
+            await loadShiftRequestsFromSheet();
+            scheduleNextRealtimePoll();
             renderCalendar();
             renderAdminReserveQueue();
         }
 
-        function executePromote() {
+        async function executePromote() {
             if (!pendingPromoteData) return;
             const target = shiftRequests.find((request) => request.id === pendingPromoteData.id);
             if (target) {
                 const quotaLimit = getQuotaLimit(target.level);
                 const canPromoteAllDates = getRequestDates(target).every((date) => getApprovedCount(date, target.department, target.position, target.level) < quotaLimit);
+                const previousStatus = target.status;
                 target.status = 'Approved';
-                logAction('PROMOTE_PENDING_REQUEST', getRequestLogDetail(target));
+                const saved = await logAction('PROMOTE_PENDING_REQUEST', getRequestLogDetail(target), {
+                    successText: 'บันทึกการเลื่อนสิทธิ์สำเร็จ',
+                    failureText: 'บันทึกการเลื่อนสิทธิ์ไม่สำเร็จ'
+                });
+                if (!saved) {
+                    target.status = previousStatus;
+                    renderCalendar();
+                    renderAdminReserveQueue();
+                    alert('บันทึกการเลื่อนสิทธิ์ลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
+                    return;
+                }
                 alert(canPromoteAllDates ? 'เลื่อนสิทธิ์ตัวสำรองให้เป็นตัวจริงเรียบร้อยแล้ว' : 'เลื่อนสิทธิ์ตัวสำรองให้เป็นตัวจริงเรียบร้อยแล้ว (Admin อนุมัติเกินโควต้า)');
             }
             document.getElementById('promote-modal').classList.add('hidden');
@@ -2477,14 +2680,14 @@
             saveStaffToSheet();
         };
 
-        window.deleteShift = function(requestId) {
-            cancelShiftAndCheckQueue(requestId);
+        window.deleteShift = async function(requestId) {
+            await cancelShiftAndCheckQueue(requestId);
             if (!shiftRequests.some((request) => request.id === requestId)) {
                 document.getElementById('day-detail-modal').classList.add('hidden');
             }
         };
 
-        window.editShiftDates = function(requestId) {
+        window.editShiftDates = async function(requestId) {
             if (currentRole !== 'admin') {
                 alert('เฉพาะแอดมินเท่านั้นที่แก้ไขวันขอเวรได้');
                 return;
@@ -2519,11 +2722,28 @@
                     return;
                 }
             }
+            const previousStartDate = request.startDate;
+            const previousEndDate = request.endDate;
+            const previousDates = getRequestDates(request).slice();
+            const previousDate = request.date;
             request.startDate = newStartDate;
             request.endDate = newEndDate;
             request.dates = newDates;
             delete request.date;
-            logAction('EDIT_REQUEST_DATES', getRequestLogDetail(request));
+            const saved = await logAction('EDIT_REQUEST_DATES', getRequestLogDetail(request), {
+                successText: 'บันทึกการแก้ไขวันสำเร็จ',
+                failureText: 'บันทึกการแก้ไขวันไม่สำเร็จ'
+            });
+            if (!saved) {
+                request.startDate = previousStartDate;
+                request.endDate = previousEndDate;
+                request.dates = previousDates;
+                if (previousDate) request.date = previousDate;
+                renderCalendar();
+                renderAdminReserveQueue();
+                alert('บันทึกการแก้ไขวันลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
+                return;
+            }
             showCalendarMonth(newStartDate);
             renderCalendar();
             renderAdminReserveQueue();
@@ -3545,11 +3765,11 @@
                                 <div class="font-semibold text-amber-800">${displayName}</div>
                                 <div class="text-xs text-amber-700">วันที่ ${getRequestDateText(request)} • ${request.department} • ${request.position || (user ? user.position : '')} • ${request.leaveType || '-'}${trainingText} • Level ${request.level} • สถานะตัวสำรอง</div>
                             </div>
-                            <button onclick="approveReserveRequest(${request.id})" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">อนุมัติ</button>
+                            <button onclick="approveReserveRequest(${request.id}).catch(handleAsyncActionError)" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">อนุมัติ</button>
                         </div>
                         <div class="mt-3 flex flex-wrap justify-end gap-2">
-                            <button onclick="editShiftDates(${request.id})" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">แก้ไขวัน</button>
-                            <button onclick="deleteShift(${request.id})" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">ยกเลิก</button>
+                            <button onclick="editShiftDates(${request.id}).catch(handleAsyncActionError)" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">แก้ไขวัน</button>
+                            <button onclick="deleteShift(${request.id}).catch(handleAsyncActionError)" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">ยกเลิก</button>
                         </div>
                     </div>
                 `;
@@ -3578,11 +3798,11 @@
                                 <div class="font-semibold text-red-800">${displayName}</div>
                                 <div class="text-xs text-red-700">วันที่ ${getRequestDateText(request)} • ${request.department} • ${request.position || (user ? user.position : '')} • ${request.leaveType || '-'}${trainingText} • Level ${request.level} • รอยืนยันยกเลิก</div>
                             </div>
-                            <button onclick="approveReserveRequest(${request.id})" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Cancel</button>
+                            <button onclick="approveReserveRequest(${request.id}).catch(handleAsyncActionError)" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Cancel</button>
                         </div>
                         <div class="mt-3 flex flex-wrap justify-end gap-2">
-                            <button onclick="editShiftDates(${request.id})" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">แก้ไขวัน</button>
-                            <button onclick="deleteShift(${request.id})" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">ลบคำขอ</button>
+                            <button onclick="editShiftDates(${request.id}).catch(handleAsyncActionError)" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">แก้ไขวัน</button>
+                            <button onclick="deleteShift(${request.id}).catch(handleAsyncActionError)" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">ลบคำขอ</button>
                         </div>
                     </div>
                 `;
