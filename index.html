@@ -181,6 +181,33 @@
         #heatmap-summary > div > div:last-child {
             color: var(--palette-ink) !important;
         }
+
+        @media (max-width: 767px) {
+            html,
+            body {
+                max-width: 100%;
+                overflow-x: hidden;
+            }
+
+            #level-legend {
+                gap: 0.25rem !important;
+            }
+
+            #level-legend span {
+                padding: 0.2rem 0.35rem !important;
+                font-size: 0.65rem;
+            }
+
+            #reserve-modal > div,
+            #promote-modal > div,
+            #day-detail-modal > div,
+            #monthly-action-modal > div,
+            #thai-date-picker-modal > div,
+            #admin-password-modal > div {
+                max-height: calc(100vh - 2rem);
+                overflow-y: auto;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans min-h-screen">
@@ -279,23 +306,44 @@
                     </button>
                 </form>
             </div>
+
+            <div id="request-summary-section" class="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-100">
+                <h2 class="text-lg font-bold text-gray-700 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-clipboard-list text-teal-600"></i> สรุปเวรที่ขอ
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">เลือกหน่วยงาน</label>
+                        <select id="summary-department-filter" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">เลือกตำแหน่ง</label>
+                        <select id="summary-position-filter" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">เลือกเจ้าหน้าที่</label>
+                        <select id="summary-user-filter" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none"></select>
+                    </div>
+                </div>
+                <div id="request-summary-count" class="mt-3 text-xs font-semibold text-gray-500"></div>
+            </div>
         </div>
 
-        <div id="calendar-view" class="xl:col-span-2 bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col min-w-0">
-            <div class="flex justify-between items-center gap-2 mb-4 md:mb-6">
-                <button id="btn-prev-month" class="p-2 hover:bg-gray-100 rounded-full transition"><i class="fa-solid fa-chevron-left"></i></button>
-                <h2 id="calendar-month-year" class="text-base md:text-xl font-bold text-gray-800 text-center">กรกฎาคม 2026</h2>
-                <button id="btn-next-month" class="p-2 hover:bg-gray-100 rounded-full transition"><i class="fa-solid fa-chevron-right"></i></button>
+        <div id="calendar-view" class="xl:col-span-2 bg-white p-2.5 sm:p-3 md:p-6 rounded-xl md:rounded-2xl shadow-sm border border-gray-100 flex flex-col min-w-0">
+            <div class="flex justify-between items-center gap-2 mb-3 md:mb-6">
+                <button id="btn-prev-month" class="shrink-0 p-2 hover:bg-gray-100 rounded-full transition"><i class="fa-solid fa-chevron-left"></i></button>
+                <h2 id="calendar-month-year" class="min-w-0 text-sm sm:text-base md:text-xl font-bold text-gray-800 text-center">กรกฎาคม 2026</h2>
+                <button id="btn-next-month" class="shrink-0 p-2 hover:bg-gray-100 rounded-full transition"><i class="fa-solid fa-chevron-right"></i></button>
             </div>
 
-            <div id="level-legend" class="flex flex-wrap gap-2 mb-4 text-xs"></div>
+            <div id="level-legend" class="flex flex-wrap gap-1 md:gap-2 mb-3 md:mb-4 text-[10px] md:text-xs"></div>
 
-            <div class="overflow-x-auto pb-2">
-                <div class="min-w-[760px]">
-                    <div class="grid grid-cols-7 gap-2 text-center font-bold text-sm text-gray-500 mb-2">
+            <div class="overflow-visible md:overflow-x-auto md:pb-2">
+                <div class="w-full min-w-0 md:min-w-[760px]">
+                    <div class="grid grid-cols-7 gap-1 md:gap-2 text-center font-bold text-[10px] md:text-sm text-gray-500 mb-1.5 md:mb-2">
                         <div>อา.</div><div>จ.</div><div>อ.</div><div>พ.</div><div>พฤ.</div><div>ศ.</div><div>ส.</div>
                     </div>
-                    <div id="calendar-days" class="grid grid-cols-7 gap-2 flex-grow"></div>
+                    <div id="calendar-days" class="space-y-1 md:space-y-2 flex-grow"></div>
                 </div>
             </div>
         </div>
@@ -640,6 +688,7 @@
         const requestToday = new Date();
         requestToday.setHours(0, 0, 0, 0);
         let currentDate = new Date(requestToday.getFullYear(), requestToday.getMonth(), 1);
+        let lastCalendarCompactMode = null;
         let pendingReserveData = null;
         let pendingPromoteData = null;
         let selectedMonthlyRequestId = null;
@@ -742,6 +791,8 @@
             await loadShiftRequestsFromSheet({ silent: false });
             renderPositionDropdowns();
             renderUserDropdowns();
+            renderRequestSummaryFilters();
+            renderRequestSummary();
             renderAdminTable();
             renderAdminSettings();
             renderAdminReserveQueue();
@@ -1129,6 +1180,17 @@
                 currentDate.setMonth(currentDate.getMonth() + 1);
                 renderCalendar();
             });
+            window.addEventListener('resize', () => {
+                const compactMode = isCompactCalendarViewport();
+                if (lastCalendarCompactMode === null) {
+                    lastCalendarCompactMode = compactMode;
+                    return;
+                }
+                if (compactMode !== lastCalendarCompactMode) {
+                    lastCalendarCompactMode = compactMode;
+                    renderCalendar();
+                }
+            });
 
             document.getElementById('shift-form').addEventListener('submit', (e) => {
                 e.preventDefault();
@@ -1144,6 +1206,20 @@
             });
             document.getElementById('form-position-select').addEventListener('change', () => {
                 renderUserDropdowns();
+                renderCalendar();
+            });
+            document.getElementById('summary-department-filter').addEventListener('change', () => {
+                renderRequestSummaryFilters({ keepDepartment: true });
+                renderRequestSummary();
+                renderCalendar();
+            });
+            document.getElementById('summary-position-filter').addEventListener('change', () => {
+                renderRequestSummaryFilters({ keepDepartment: true, keepPosition: true });
+                renderRequestSummary();
+                renderCalendar();
+            });
+            document.getElementById('summary-user-filter').addEventListener('change', () => {
+                renderRequestSummary();
                 renderCalendar();
             });
             document.getElementById('form-leave-type').addEventListener('change', () => {
@@ -2200,6 +2276,10 @@
             currentDate = new Date(date.getFullYear(), date.getMonth(), 1);
         }
 
+        function isCompactCalendarViewport() {
+            return Boolean(window.matchMedia && window.matchMedia('(max-width: 767px)').matches);
+        }
+
         function getRequestTooltip(request) {
             const trainingText = request.trainingNote ? ` | หมายเหตุ: ${request.trainingNote}` : '';
             const statusText = request.leaveType === 'ยกเลิก' && request.status === 'Pending'
@@ -2279,6 +2359,30 @@
             ));
             const coveredDates = new Set(matchedRequests.flatMap((request) => getRequestDates(request)));
             return cancelDates.every((date) => coveredDates.has(date)) ? matchedRequests : [];
+        }
+
+        function isSameUserForDuplicateCheck(request, user) {
+            if (isSameRequestUser(request, user)) return true;
+            const requestName = normalizeName(request.name);
+            const userName = normalizeName(user.name);
+            const requestUserId = normalizeUserId(request.userId);
+            if (requestUserId) return false;
+            return Boolean(
+                requestName
+                && userName
+                && requestName === userName
+                && (!request.department || request.department === user.department)
+                && (!request.position || request.position === user.position)
+            );
+        }
+
+        function findDuplicateRequestDate(user, requestedDates, excludedRequestId = null) {
+            return requestedDates.find((date) => shiftRequests.some((request) => (
+                String(request.id) !== String(excludedRequestId)
+                && request.leaveType !== 'ยกเลิก'
+                && isSameUserForDuplicateCheck(request, user)
+                && getRequestDates(request).includes(date)
+            )));
         }
 
         async function handleShiftRequest() {
@@ -2417,12 +2521,9 @@
                 }
             }
 
-            const duplicate = shiftRequests.some((request) => (
-                isSameRequestUser(request, user)
-                && getRequestDates(request).some((date) => requestedDates.includes(date))
-            ));
-            if (duplicate) {
-                alert('คุณได้ยื่นคำขอเวรในช่วงวันที่เลือกไว้แล้ว');
+            const duplicateDate = findDuplicateRequestDate(user, requestedDates);
+            if (duplicateDate) {
+                alert(`คุณมีคำขอเวรวันที่ ${formatDisplayDate(duplicateDate)} อยู่แล้ว หากต้องการยกเลิกให้เลือกประเภท "ยกเลิก"`);
                 return;
             }
 
@@ -3042,6 +3143,13 @@
                     return;
                 }
             }
+            if (request.leaveType !== 'ยกเลิก') {
+                const duplicateDate = findDuplicateRequestDate(requestUser, newDates, request.id);
+                if (duplicateDate) {
+                    alert(`มีคำขอเวรวันที่ ${formatDisplayDate(duplicateDate)} ของเจ้าหน้าที่คนนี้อยู่แล้ว`);
+                    return;
+                }
+            }
             const previousStartDate = request.startDate;
             const previousEndDate = request.endDate;
             const previousDates = getRequestDates(request).slice();
@@ -3082,15 +3190,13 @@
             const totalDays = new Date(year, month + 1, 0).getDate();
 
             const calendarDaysContainer = document.getElementById('calendar-days');
-            calendarDaysContainer.className = 'space-y-2 flex-grow';
+            const compactCalendar = isCompactCalendarViewport();
+            lastCalendarCompactMode = compactCalendar;
+            calendarDaysContainer.className = 'space-y-1 md:space-y-2 flex-grow';
             calendarDaysContainer.innerHTML = '';
 
-            const selectedCalendarDepartment = document.getElementById('form-department-select').value || departments[0];
-            const selectedCalendarPosition = document.getElementById('form-position-select').value;
-            const matchesCalendarFilters = (request) => (
-                request.department === selectedCalendarDepartment
-                && request.position === selectedCalendarPosition
-            );
+            const calendarFilterState = getCalendarFilterState();
+            const matchesCalendarFilters = (request) => matchesCalendarRequestFilter(request, calendarFilterState);
             const slots = [];
             for (let i = 0; i < firstDayIndex; i += 1) {
                 slots.push(null);
@@ -3113,12 +3219,12 @@
                 weekBlock.className = 'overflow-visible';
 
                 const weekGrid = document.createElement('div');
-                weekGrid.className = 'grid grid-cols-7 gap-2 overflow-visible';
+                weekGrid.className = 'grid grid-cols-7 gap-1 md:gap-2 overflow-visible';
                 const weekDates = weekSlots.map((slot) => slot ? slot.date : null);
-                const maxVisibleLanes = 3;
-                const laneHeightRem = 1.65;
-                const calendarGapRem = 0.5;
-                const dayHorizontalPaddingRem = 0.5;
+                const maxVisibleLanes = compactCalendar ? 2 : 3;
+                const laneHeightRem = compactCalendar ? 1.32 : 1.65;
+                const calendarGapRem = compactCalendar ? 0.25 : 0.5;
+                const dayHorizontalPaddingRem = compactCalendar ? 0.25 : 0.5;
                 const weekSegments = shiftRequests
                     .filter(matchesCalendarFilters)
                     .map((request) => {
@@ -3153,7 +3259,7 @@
                 weekSlots.forEach((slot, dayIndex) => {
                     if (!slot) {
                         const blankDiv = document.createElement('div');
-                        blankDiv.className = 'bg-gray-50/50 border border-gray-100 rounded-xl min-h-[118px] overflow-hidden';
+                        blankDiv.className = 'bg-gray-50/50 border border-gray-100 rounded-lg md:rounded-xl min-h-[86px] md:min-h-[118px] overflow-hidden';
                         weekGrid.appendChild(blankDiv);
                         return;
                     }
@@ -3163,7 +3269,7 @@
                     const holidayClasses = isCalendarHoliday(fullDateStr)
                         ? 'bg-yellow-50 border-yellow-200'
                         : 'bg-white border-gray-100';
-                    dayDiv.className = `${holidayClasses} relative border rounded-xl p-2 min-h-[118px] flex flex-col hover:shadow-sm transition overflow-visible cursor-pointer`;
+                    dayDiv.className = `${holidayClasses} relative border rounded-lg md:rounded-xl p-1 md:p-2 min-h-[86px] md:min-h-[118px] flex flex-col hover:shadow-sm transition overflow-visible cursor-pointer`;
                     if (publicHolidays[fullDateStr]) {
                         dayDiv.title = publicHolidays[fullDateStr];
                     } else if (isWeekend(fullDateStr)) {
@@ -3184,13 +3290,13 @@
 
                     const dayHeader = document.createElement('div');
                     dayHeader.className = isCalendarHoliday(fullDateStr)
-                        ? 'text-left text-xs font-bold text-yellow-700 mb-1'
-                        : 'text-left text-xs font-bold text-gray-400 mb-1';
+                        ? 'text-left text-[10px] md:text-xs font-bold text-yellow-700 mb-0.5 md:mb-1'
+                        : 'text-left text-[10px] md:text-xs font-bold text-gray-400 mb-0.5 md:mb-1';
                     dayHeader.innerText = slot.day;
                     dayDiv.appendChild(dayHeader);
 
                     const listContainer = document.createElement('div');
-                    listContainer.className = 'relative flex-grow min-h-[6.8rem] overflow-visible';
+                    listContainer.className = 'relative flex-grow min-h-[4.1rem] md:min-h-[6.8rem] overflow-visible';
 
                     const startingSegments = weekSegments
                         .filter((segment) => segment.startIndex === dayIndex && segment.lane < maxVisibleLanes);
@@ -3205,11 +3311,14 @@
                         const isMultiDay = isMultiDayRequest(request);
                         const span = Math.max(1, segment.endIndex - segment.startIndex + 1);
                         const endEdgeExtraRem = (span - 1) * (calendarGapRem + dayHorizontalPaddingRem * 2) + dayHorizontalPaddingRem;
+                        const pendingPrefix = request.status === 'Pending' ? '<span class="text-red-600">[รอ]</span> ' : '';
                         item.style.top = `${segment.lane * laneHeightRem}rem`;
                         item.style.width = `calc(${span * 100}% + ${endEdgeExtraRem}rem)`;
-                        item.className = `absolute left-0 z-20 h-6 text-[10px] leading-4 p-1 rounded-md border ${colorStyle.bg} transition-all truncate whitespace-nowrap shadow-sm`;
+                        item.className = `absolute left-0 z-20 h-5 md:h-6 text-[9px] md:text-[10px] leading-3 md:leading-4 px-1 py-0.5 md:p-1 rounded border md:rounded-md ${colorStyle.bg} transition-all truncate whitespace-nowrap shadow-sm`;
                         item.title = getRequestTooltip(request);
-                        item.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full ${colorStyle.dot} mr-1"></span><span class="font-bold">${request.status === 'Pending' ? '<span class="text-red-600">[รอ]</span> ' : ''}${displayName}</span> <span class="opacity-80">• ${request.leaveType || '-'} • ${levelLabel}${isMultiDay ? ` • ${getRequestDateText(request)}` : ''}</span>`;
+                        item.innerHTML = compactCalendar
+                            ? `<span class="inline-block w-1 h-1 rounded-full ${colorStyle.dot} mr-0.5"></span><span class="font-bold">${pendingPrefix}${displayName}</span>`
+                            : `<span class="inline-block w-1.5 h-1.5 rounded-full ${colorStyle.dot} mr-1"></span><span class="font-bold">${pendingPrefix}${displayName}</span> <span class="opacity-80">• ${request.leaveType || '-'} • ${levelLabel}${isMultiDay ? ` • ${getRequestDateText(request)}` : ''}</span>`;
                         item.addEventListener('click', (event) => {
                             event.stopPropagation();
                             openDayDetail(fullDateStr, dayRequests);
@@ -3226,8 +3335,8 @@
                     if (hiddenInlineCount > 0) {
                         const moreBtn = document.createElement('button');
                         moreBtn.style.top = `${maxVisibleLanes * laneHeightRem}rem`;
-                        moreBtn.className = 'absolute left-0 z-30 w-full text-left text-[10px] font-semibold text-teal-700 hover:text-teal-900 px-1 py-0.5 rounded hover:bg-teal-50 truncate';
-                        moreBtn.innerText = `+${hiddenInlineCount} เพิ่มเติม`;
+                        moreBtn.className = 'absolute left-0 z-30 w-full text-left text-[9px] md:text-[10px] font-semibold text-teal-700 hover:text-teal-900 px-0.5 md:px-1 py-0.5 rounded hover:bg-teal-50 truncate';
+                        moreBtn.innerText = compactCalendar ? `+${hiddenInlineCount}` : `+${hiddenInlineCount} เพิ่มเติม`;
                         moreBtn.title = dayRequests.map(getRequestTooltip).join('\n');
                         moreBtn.addEventListener('click', (event) => {
                             event.stopPropagation();
@@ -3243,6 +3352,7 @@
                 weekBlock.appendChild(weekGrid);
                 calendarDaysContainer.appendChild(weekBlock);
             }
+            renderRequestSummary();
         }
 
         function renderLevelLegend() {
@@ -3290,6 +3400,133 @@
             select.innerHTML = filteredUsers.length
                 ? filteredUsers.map((user) => `<option value="${makeUserSelectValue(user)}">${user.name} (${user.level})</option>`).join('')
                 : '<option value="">ไม่มีเจ้าหน้าที่ในเงื่อนไขนี้</option>';
+            renderRequestSummaryFilters({ keepDepartment: true, keepPosition: true, keepUser: true });
+            renderRequestSummary();
+        }
+
+        function renderRequestSummaryFilters(options = {}) {
+            const departmentSelect = document.getElementById('summary-department-filter');
+            const positionSelect = document.getElementById('summary-position-filter');
+            const userSelect = document.getElementById('summary-user-filter');
+            if (!departmentSelect || !positionSelect || !userSelect) return;
+
+            const currentDepartment = options.keepDepartment ? departmentSelect.value : '';
+            const currentPosition = options.keepPosition ? positionSelect.value : '';
+            const currentUser = options.keepUser ? userSelect.value : '';
+
+            departmentSelect.innerHTML = `
+                <option value="">ทุกหน่วยงาน</option>
+                ${departments.map((department) => `<option value="${department}">${department}</option>`).join('')}
+            `;
+            departmentSelect.value = departments.includes(currentDepartment) ? currentDepartment : '';
+
+            const filteredPositions = positions.filter((position) => (
+                !departmentSelect.value
+                || users.some((user) => user.department === departmentSelect.value && user.position === position)
+            ));
+            positionSelect.innerHTML = `
+                <option value="">ทุกตำแหน่ง</option>
+                ${filteredPositions.map((position) => `<option value="${position}">${position}</option>`).join('')}
+            `;
+            positionSelect.value = filteredPositions.includes(currentPosition) ? currentPosition : '';
+
+            const filteredUsers = users
+                .filter((user) => !departmentSelect.value || user.department === departmentSelect.value)
+                .filter((user) => !positionSelect.value || user.position === positionSelect.value);
+            const userOptions = filteredUsers.map((user) => ({
+                value: makeUserSelectValue(user),
+                label: `${user.name} (${user.level})`
+            }));
+            userSelect.innerHTML = `
+                <option value="">ทุกชื่อ</option>
+                ${userOptions.map((user) => `<option value="${user.value}">${user.label}</option>`).join('')}
+            `;
+            userSelect.value = userOptions.some((user) => user.value === currentUser) ? currentUser : '';
+        }
+
+        function getRequestSummaryStatus(request) {
+            if (request.leaveType === 'ยกเลิก' && request.status === 'Pending') {
+                return { text: 'รอยืนยันยกเลิก', className: 'bg-red-100 text-red-700 border-red-200' };
+            }
+            if (request.status === 'Pending') {
+                return { text: 'รออนุมัติ', className: 'bg-amber-100 text-amber-700 border-amber-200' };
+            }
+            return { text: 'อนุมัติแล้ว', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+        }
+
+        function matchesSummaryUserFilter(request, selectedUser) {
+            if (!selectedUser.id && !selectedUser.name) return true;
+            if (selectedUser.id && isSameRequestUser(request, selectedUser)) return true;
+            return Boolean(selectedUser.name && normalizeName(request.name) === normalizeName(selectedUser.name));
+        }
+
+        function getSummaryFilterState() {
+            const department = document.getElementById('summary-department-filter')?.value || '';
+            const position = document.getElementById('summary-position-filter')?.value || '';
+            const selectedUser = parseUserSelectValue(document.getElementById('summary-user-filter')?.value || '');
+            return {
+                department,
+                position,
+                selectedUser,
+                isActive: Boolean(department || position || selectedUser.id || selectedUser.name)
+            };
+        }
+
+        function matchesSummaryFilters(request, filterState = getSummaryFilterState()) {
+            return (!filterState.department || request.department === filterState.department)
+                && (!filterState.position || request.position === filterState.position)
+                && matchesSummaryUserFilter(request, filterState.selectedUser);
+        }
+
+        function getCalendarFilterState() {
+            const summaryFilter = getSummaryFilterState();
+            if (summaryFilter.isActive) {
+                return {
+                    mode: 'summary',
+                    summaryFilter
+                };
+            }
+
+            return {
+                mode: 'request',
+                department: document.getElementById('form-department-select').value || departments[0],
+                position: document.getElementById('form-position-select').value
+            };
+        }
+
+        function matchesCalendarRequestFilter(request, filterState = getCalendarFilterState()) {
+            if (filterState.mode === 'summary') {
+                return matchesSummaryFilters(request, filterState.summaryFilter);
+            }
+            return request.department === filterState.department
+                && request.position === filterState.position;
+        }
+
+        function getFilteredSummaryRequests() {
+            const filterState = getSummaryFilterState();
+            const matchesRequest = filterState.isActive
+                ? (request) => matchesSummaryFilters(request, filterState)
+                : (request) => matchesCalendarRequestFilter(request, getCalendarFilterState());
+
+            return shiftRequests
+                .filter(matchesRequest)
+                .sort((a, b) => String(a.startDate || a.date || '').localeCompare(String(b.startDate || b.date || ''))
+                    || compareRequestsByLevelThenTime(a, b));
+        }
+
+        function renderRequestSummary() {
+            const count = document.getElementById('request-summary-count');
+            if (!count) return;
+
+            const requests = getFilteredSummaryRequests();
+            const filterState = getSummaryFilterState();
+            const approvedDays = requests
+                .filter((request) => request.status === 'Approved')
+                .flatMap((request) => getRequestDates(request))
+                .length;
+            const pendingCount = requests.filter((request) => request.status === 'Pending').length;
+            const activeText = filterState.isActive ? 'แสดงในปฏิทิน' : 'ปฏิทินตามฟอร์มขอเวร';
+            count.innerText = `${activeText}: ${requests.length} รายการ • อนุมัติ ${approvedDays} วัน • รอ ${pendingCount} รายการ`;
         }
 
         function renderAdminTable() {
