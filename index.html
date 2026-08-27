@@ -745,6 +745,10 @@
         const REALTIME_POLL_MAX_MS = 10000;
         const HIDDEN_REALTIME_POLL_MIN_MS = 30000;
         const HIDDEN_REALTIME_POLL_MAX_MS = 60000;
+        const JSONP_DEFAULT_TIMEOUT_MS = 15000;
+        const JSONP_LIGHT_READ_TIMEOUT_MS = 22000;
+        const JSONP_REQUEST_READ_TIMEOUT_MS = 35000;
+        const JSONP_READ_RETRIES = 1;
         const WRITE_VERIFY_TIMEOUT_MS = 3000;
 
         const levelColors = {
@@ -1456,7 +1460,11 @@
                 : normalizeUserId(request.userId);
         }
 
-        function requestAppsScriptJsonp(action, params = {}, timeoutMs = 10000) {
+        function delay(ms) {
+            return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+
+        function requestAppsScriptJsonp(action, params = {}, timeoutMs = JSONP_DEFAULT_TIMEOUT_MS) {
             if (!GOOGLE_SHEET_LOG_URL) {
                 return Promise.resolve({ ok: false, message: 'ยังไม่ได้ตั้งค่า Google Apps Script Web App URL' });
             }
@@ -1464,20 +1472,36 @@
             return new Promise((resolve) => {
                 const callbackName = `appsScript_${Date.now()}_${Math.random().toString(36).slice(2)}`;
                 const script = document.createElement('script');
+                let settled = false;
                 const timeoutId = setTimeout(() => {
-                    cleanup();
-                    resolve({ ok: false, message: 'เชื่อมต่อ Apps Script ไม่ได้ หรือ Web App ยังไม่ใช่เวอร์ชันล่าสุด' });
+                    safeResolve({
+                        ok: false,
+                        timedOut: true,
+                        action,
+                        message: 'เชื่อมต่อ Apps Script ช้าเกินไป กำลังลองใหม่หรือรอ sync รอบถัดไป'
+                    }, true);
                 }, timeoutMs);
 
-                function cleanup() {
+                function cleanup(keepCallbackForLateResponse = false) {
                     clearTimeout(timeoutId);
-                    delete window[callbackName];
+                    if (keepCallbackForLateResponse) {
+                        window[callbackName] = () => {};
+                        setTimeout(() => delete window[callbackName], 60000);
+                    } else {
+                        delete window[callbackName];
+                    }
                     script.remove();
                 }
 
-                window[callbackName] = (response) => {
-                    cleanup();
+                function safeResolve(response, keepCallbackForLateResponse = false) {
+                    if (settled) return;
+                    settled = true;
+                    cleanup(keepCallbackForLateResponse);
                     resolve(response || { ok: false });
+                }
+
+                window[callbackName] = (response) => {
+                    safeResolve(response);
                 };
 
                 const url = new URL(GOOGLE_SHEET_LOG_URL);
@@ -1488,12 +1512,40 @@
                 url.searchParams.set('callback', callbackName);
                 url.searchParams.set('_', Date.now());
                 script.onerror = () => {
-                    cleanup();
-                    resolve({ ok: false, message: 'โหลด Apps Script ไม่สำเร็จ กรุณาตรวจ Web App URL และสิทธิ์ Anyone' });
+                    safeResolve({
+                        ok: false,
+                        networkError: true,
+                        action,
+                        message: 'โหลด Apps Script ไม่สำเร็จ กรุณาตรวจ Web App URL และสิทธิ์ Anyone'
+                    });
                 };
                 script.src = url.toString();
                 document.body.appendChild(script);
             });
+        }
+
+        async function requestAppsScriptJsonpWithRetry(action, params = {}, options = {}) {
+            const {
+                timeoutMs = JSONP_DEFAULT_TIMEOUT_MS,
+                retries = JSONP_READ_RETRIES,
+                retryDelayMs = 900
+            } = options;
+            let lastResponse = null;
+
+            for (let attempt = 0; attempt <= retries; attempt += 1) {
+                const response = await requestAppsScriptJsonp(action, params, timeoutMs);
+                if (response && response.ok) return response;
+
+                lastResponse = response;
+                const canRetry = !response || response.timedOut || response.networkError;
+                if (!canRetry || attempt >= retries) break;
+                await delay(retryDelayMs * (attempt + 1));
+            }
+
+            return lastResponse || {
+                ok: false,
+                message: 'เชื่อมต่อ Apps Script ไม่สำเร็จ'
+            };
         }
 
         function normalizeUsers(nextUsers) {
@@ -1526,7 +1578,9 @@
         }
 
         async function loadStaffFromSheet() {
-            const response = await requestAppsScriptJsonp('getStaff');
+            const response = await requestAppsScriptJsonpWithRetry('getStaff', {}, {
+                timeoutMs: JSONP_LIGHT_READ_TIMEOUT_MS
+            });
             if (!response || !response.ok) {
                 alert(response?.message || 'โหลดรายชื่อจาก Google Sheet ไม่สำเร็จ: Apps Script ยังไม่ได้ Deploy โค้ดเวอร์ชันล่าสุดที่รองรับ getStaff');
                 return;
@@ -1572,7 +1626,9 @@
         }
 
         async function loadPublicHolidaysFromSheet({ silent = true } = {}) {
-            const response = await requestAppsScriptJsonp('getPublicHolidays');
+            const response = await requestAppsScriptJsonpWithRetry('getPublicHolidays', {}, {
+                timeoutMs: JSONP_LIGHT_READ_TIMEOUT_MS
+            });
             if (!response || !response.ok || !response.holidays) {
                 if (!silent) {
                     console.warn(response?.message || 'โหลดวันหยุดจาก Google Sheet ไม่สำเร็จ');
@@ -1629,7 +1685,9 @@
         }
 
         async function loadRequestRulesFromSheet({ silent = true } = {}) {
-            const response = await requestAppsScriptJsonp('getRequestRules');
+            const response = await requestAppsScriptJsonpWithRetry('getRequestRules', {}, {
+                timeoutMs: JSONP_LIGHT_READ_TIMEOUT_MS
+            });
             if (!response || !response.ok || !response.rules) {
                 if (!silent) {
                     console.warn(response?.message || 'โหลดกฎการเปิดรับคำขอจาก Google Sheet ไม่สำเร็จ');
@@ -1764,7 +1822,9 @@
             if (realtimeLoadInFlight) return true;
             realtimeLoadInFlight = true;
             try {
-                const response = await requestAppsScriptJsonp('getRequests');
+                const response = await requestAppsScriptJsonpWithRetry('getRequests', {}, {
+                    timeoutMs: JSONP_REQUEST_READ_TIMEOUT_MS
+                });
                 if (!response || !response.ok) {
                     updateRealtimeStatus(false);
                     if (!silent) alert(response?.message || 'โหลดข้อมูลคำขอเวรจาก Google Sheet ไม่สำเร็จ');
