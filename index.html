@@ -373,10 +373,15 @@
                 <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
                     <div class="rounded-lg border border-rose-100 bg-white p-3">
                         <h4 class="mb-2 text-xs font-bold text-rose-800">ปิดรับขอเวรก่อนกำหนด</h4>
-                        <div class="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr]">
+                        <div class="grid grid-cols-1 gap-2 md:grid-cols-[1fr_0.8fr_1fr]">
                             <label class="text-xs font-semibold text-gray-600">
                                 เดือนเวร
-                                <input id="admin-early-close-month" type="month" class="mt-1 w-full rounded-lg border border-rose-100 p-2 text-sm focus:outline-none focus:ring-1 focus:ring-rose-500">
+                                <select id="admin-early-close-month-select" class="mt-1 w-full rounded-lg border border-rose-100 p-2 text-sm focus:outline-none focus:ring-1 focus:ring-rose-500"></select>
+                                <input id="admin-early-close-month" type="hidden">
+                            </label>
+                            <label class="text-xs font-semibold text-gray-600">
+                                ปีเวร (พ.ศ.)
+                                <input id="admin-early-close-year" type="number" min="2500" max="2700" step="1" class="mt-1 w-full rounded-lg border border-rose-100 p-2 text-sm focus:outline-none focus:ring-1 focus:ring-rose-500">
                             </label>
                             <label class="text-xs font-semibold text-gray-600">
                                 วันปิดรับ
@@ -1191,6 +1196,8 @@
             });
             document.getElementById('admin-add-type').addEventListener('change', renderAdminAddPanel);
             document.getElementById('admin-position-filter').addEventListener('change', renderAdminTable);
+            document.getElementById('admin-early-close-month-select').addEventListener('change', getEarlyCloseMonthFromControls);
+            document.getElementById('admin-early-close-year').addEventListener('input', getEarlyCloseMonthFromControls);
             document.getElementById('btn-form-start-date').addEventListener('click', () => {
                 openThaiDatePicker('start');
             });
@@ -3373,17 +3380,55 @@
             return formatDateInput(getFirstAllowedUserDate()).slice(0, 7);
         }
 
+        function getThaiMonthOptions() {
+            const monthNames = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+            return monthNames.map((name, index) => ({
+                value: String(index + 1).padStart(2, '0'),
+                name
+            }));
+        }
+
+        function setEarlyCloseMonthControls(monthKey) {
+            const earlyCloseMonth = document.getElementById('admin-early-close-month');
+            const monthSelect = document.getElementById('admin-early-close-month-select');
+            const yearInput = document.getElementById('admin-early-close-year');
+            if (!earlyCloseMonth || !monthSelect || !yearInput) return;
+
+            const safeMonthKey = /^\d{4}-\d{2}$/.test(monthKey || '') ? monthKey : getDefaultEarlyCloseMonth();
+            const [year, month] = safeMonthKey.split('-');
+            earlyCloseMonth.value = safeMonthKey;
+            monthSelect.value = month;
+            yearInput.value = String(Number(year) + 543);
+        }
+
+        function getEarlyCloseMonthFromControls() {
+            const monthSelect = document.getElementById('admin-early-close-month-select');
+            const yearInput = document.getElementById('admin-early-close-year');
+            const earlyCloseMonth = document.getElementById('admin-early-close-month');
+            const month = monthSelect ? monthSelect.value : '';
+            const yearValue = Number(yearInput ? yearInput.value : '');
+            const gregorianYear = yearValue > 2400 ? yearValue - 543 : yearValue;
+            const monthKey = gregorianYear && month
+                ? `${gregorianYear}-${month}`
+                : '';
+            if (earlyCloseMonth) earlyCloseMonth.value = monthKey;
+            return monthKey;
+        }
+
         function renderRequestRulesSettings() {
             const earlyCloseMonth = document.getElementById('admin-early-close-month');
+            const monthSelect = document.getElementById('admin-early-close-month-select');
+            const yearInput = document.getElementById('admin-early-close-year');
             const earlyCloseDate = document.getElementById('admin-early-close-date');
             const earlyCloseReason = document.getElementById('admin-early-close-reason');
             const earlyCloseList = document.getElementById('admin-early-close-list');
             const blockedDateInput = document.getElementById('admin-blocked-request-date');
             const blockedReason = document.getElementById('admin-blocked-request-reason');
             const blockedList = document.getElementById('admin-blocked-request-list');
-            if (!earlyCloseMonth || !earlyCloseDate || !earlyCloseReason || !earlyCloseList || !blockedDateInput || !blockedReason || !blockedList) return;
+            if (!earlyCloseMonth || !monthSelect || !yearInput || !earlyCloseDate || !earlyCloseReason || !earlyCloseList || !blockedDateInput || !blockedReason || !blockedList) return;
 
-            if (!earlyCloseMonth.value) earlyCloseMonth.value = getDefaultEarlyCloseMonth();
+            monthSelect.innerHTML = getThaiMonthOptions().map((month) => `<option value="${month.value}">${month.name}</option>`).join('');
+            setEarlyCloseMonthControls(earlyCloseMonth.value || getDefaultEarlyCloseMonth());
             if (!blockedDateInput.value) blockedDateInput.value = formatDateInput(getFirstAllowedUserDate());
 
             earlyCloseList.innerHTML = (requestRules.earlyCloseRules || []).length
@@ -3412,11 +3457,16 @@
         }
 
         window.saveEarlyCloseRule = async function() {
-            const requestMonth = document.getElementById('admin-early-close-month').value;
+            const requestMonth = getEarlyCloseMonthFromControls();
             const closeDate = document.getElementById('admin-early-close-date').value;
             const reason = document.getElementById('admin-early-close-reason').value.trim();
             if (!requestMonth || !closeDate) {
                 alert('กรุณาเลือกเดือนเวรและวันปิดรับ');
+                return;
+            }
+
+            if (!/^\d{4}-\d{2}$/.test(requestMonth)) {
+                alert('กรุณาระบุปีเวรให้ถูกต้อง');
                 return;
             }
 
