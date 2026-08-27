@@ -25,6 +25,8 @@
             --palette-surface: #fffdf7;
             --palette-soft: #fff6ee;
             --palette-line: rgba(188, 226, 158, 0.65);
+            --palette-line-soft: rgba(188, 226, 158, 0.42);
+            --palette-line-strong: rgba(136, 189, 103, 0.72);
         }
 
         body {
@@ -82,7 +84,7 @@
 
         #user-info-box {
             background: rgba(229, 235, 178, 0.45) !important;
-            border-color: var(--palette-green) !important;
+            border-color: var(--palette-line-strong) !important;
         }
 
         #user-info-box h3,
@@ -98,8 +100,12 @@
         }
 
         #form-section,
+        #request-summary-section,
         #admin-section,
         #calendar-view,
+        #admin-pending-view,
+        #admin-cancel-view,
+        #admin-duty-roster-view,
         #admin-management-view,
         #admin-heatmap-view,
         #reserve-modal > div,
@@ -117,14 +123,20 @@
         #admin-management-view .bg-amber-50,
         #admin-add-panel {
             background: rgba(248, 196, 180, 0.22) !important;
-            border-color: rgba(255, 135, 135, 0.45) !important;
+            border-color: var(--palette-line) !important;
         }
 
         #form-section input,
         #form-section select,
+        #form-section button[type="button"],
+        #request-summary-section input,
+        #request-summary-section select,
+        #request-summary-section button[type="button"],
         #admin-management-view input,
         #admin-management-view select,
+        #admin-management-view textarea,
         #admin-heatmap-view select,
+        #admin-duty-roster-view textarea,
         #admin-password-input {
             background: #fffdf7 !important;
             border-color: rgba(188, 226, 158, 0.9) !important;
@@ -133,9 +145,15 @@
 
         #form-section input:focus,
         #form-section select:focus,
+        #form-section button[type="button"]:focus,
+        #request-summary-section input:focus,
+        #request-summary-section select:focus,
+        #request-summary-section button[type="button"]:focus,
         #admin-management-view input:focus,
         #admin-management-view select:focus,
+        #admin-management-view textarea:focus,
         #admin-heatmap-view select:focus,
+        #admin-duty-roster-view textarea:focus,
         #admin-password-input:focus {
             box-shadow: 0 0 0 3px rgba(188, 226, 158, 0.45) !important;
             border-color: var(--palette-green) !important;
@@ -180,6 +198,21 @@
 
         #heatmap-summary > div > div:last-child {
             color: var(--palette-ink) !important;
+        }
+
+        #admin-management-view [class*="border"],
+        #admin-heatmap-view [class*="border"],
+        #admin-pending-view [class*="border"],
+        #admin-cancel-view [class*="border"],
+        #admin-duty-roster-view [class*="border"],
+        #monthly-action-detail,
+        #day-detail-list [class*="border"],
+        .app-calendar-day {
+            border-color: var(--palette-line) !important;
+        }
+
+        #calendar-days .app-calendar-day {
+            box-shadow: inset 0 0 0 1px var(--palette-line-soft);
         }
 
         @media (max-width: 767px) {
@@ -3259,7 +3292,7 @@
                 weekSlots.forEach((slot, dayIndex) => {
                     if (!slot) {
                         const blankDiv = document.createElement('div');
-                        blankDiv.className = 'bg-gray-50/50 border border-gray-100 rounded-lg md:rounded-xl min-h-[86px] md:min-h-[118px] overflow-hidden';
+                        blankDiv.className = 'app-calendar-day bg-gray-50/50 border border-gray-100 rounded-lg md:rounded-xl min-h-[86px] md:min-h-[118px] overflow-hidden';
                         weekGrid.appendChild(blankDiv);
                         return;
                     }
@@ -3269,7 +3302,7 @@
                     const holidayClasses = isCalendarHoliday(fullDateStr)
                         ? 'bg-yellow-50 border-yellow-200'
                         : 'bg-white border-gray-100';
-                    dayDiv.className = `${holidayClasses} relative border rounded-lg md:rounded-xl p-1 md:p-2 min-h-[86px] md:min-h-[118px] flex flex-col hover:shadow-sm transition overflow-visible cursor-pointer`;
+                    dayDiv.className = `app-calendar-day ${holidayClasses} relative border rounded-lg md:rounded-xl p-1 md:p-2 min-h-[86px] md:min-h-[118px] flex flex-col hover:shadow-sm transition overflow-visible cursor-pointer`;
                     if (publicHolidays[fullDateStr]) {
                         dayDiv.title = publicHolidays[fullDateStr];
                     } else if (isWeekend(fullDateStr)) {
