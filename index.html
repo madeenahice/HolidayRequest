@@ -236,7 +236,7 @@
                 <h3 class="font-bold text-blue-800 mb-1"><i class="fa-solid fa-circle-info mr-1"></i> กฎการขอเวร</h3>
                 <ul class="text-xs text-blue-700 space-y-1 list-disc list-inside">
                     <li>ขอเวรได้ไม่เกิน 6 เดือน นับจากเดือนแรกที่ระบบเปิดให้ขอเวร</li>
-                    <li>ต้องขอภายในวันที่ 25 เช่น เวรสิงหาคมต้องขอภายใน 25 มิถุนายน และเวรกันยายนต้องขอภายใน 25 กรกฎาคม</li>
+                    <li>ต้องขอภายในวันที่ 25 หรือวันปิดรับก่อนกำหนดที่ Admin ตั้งไว้</li>
                     <li>หน่วยงานเดียวกัน ตำแหน่งเดียวกัน และ Level เดียวกัน ขอพร้อมกันได้ไม่เกิน 2 คน/วัน ยกเว้น Level 5 ได้ไม่เกิน 3 คน/วัน</li>
                     <li>ผู้ที่ขอเวรเป็นประจำ อาจไม่ได้สิทธิ์ในรอบนั้น ๆ เพื่อกระจายให้คนอื่นอย่างเป็นธรรม</li>
                     <li class="font-bold text-red-600">หากต้องการยกเลิก ให้คีย์ "ยกเลิก" และแจ้งแอดมิน(ไอซ์/อิ๋ง)</li>
@@ -363,6 +363,41 @@
                     </div>
                 </div>
                 <div id="request-user-id-repair-result" class="mt-2 hidden rounded-lg border border-sky-100 bg-white p-2 text-xs text-sky-800"></div>
+            </div>
+
+            <div class="mb-3 rounded-xl border border-rose-100 bg-rose-50/70 p-3">
+                <div class="mb-3">
+                    <h3 class="text-sm font-bold text-rose-800">กฎการเปิดรับคำขอ</h3>
+                    <p class="text-xs text-rose-700">ตั้งค่าปิดรับก่อนวันที่ 25 และงดขอเวรเฉพาะวันที่ต้องการ พร้อมเหตุผลที่จะแจ้ง user</p>
+                </div>
+                <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    <div class="rounded-lg border border-rose-100 bg-white p-3">
+                        <h4 class="mb-2 text-xs font-bold text-rose-800">ปิดรับขอเวรก่อนกำหนด</h4>
+                        <div class="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr]">
+                            <label class="text-xs font-semibold text-gray-600">
+                                เดือนเวร
+                                <input id="admin-early-close-month" type="month" class="mt-1 w-full rounded-lg border border-rose-100 p-2 text-sm focus:outline-none focus:ring-1 focus:ring-rose-500">
+                            </label>
+                            <label class="text-xs font-semibold text-gray-600">
+                                วันปิดรับ
+                                <input id="admin-early-close-date" type="date" class="mt-1 w-full rounded-lg border border-rose-100 p-2 text-sm focus:outline-none focus:ring-1 focus:ring-rose-500">
+                            </label>
+                        </div>
+                        <input id="admin-early-close-reason" placeholder="เหตุผล เช่น ปิดรับก่อนกำหนดเพื่อจัดตารางเวร" class="mt-2 w-full rounded-lg border border-rose-100 p-2 text-sm focus:outline-none focus:ring-1 focus:ring-rose-500">
+                        <button onclick="saveEarlyCloseRule().catch(handleAsyncActionError)" class="mt-2 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700">บันทึกกฎปิดรับ</button>
+                        <div id="admin-early-close-list" class="mt-3 space-y-1 text-xs"></div>
+                    </div>
+                    <div class="rounded-lg border border-rose-100 bg-white p-3">
+                        <h4 class="mb-2 text-xs font-bold text-rose-800">งดขอเวรเฉพาะวัน</h4>
+                        <label class="text-xs font-semibold text-gray-600">
+                            วันที่งดขอเวร
+                            <input id="admin-blocked-request-date" type="date" class="mt-1 w-full rounded-lg border border-rose-100 p-2 text-sm focus:outline-none focus:ring-1 focus:ring-rose-500">
+                        </label>
+                        <input id="admin-blocked-request-reason" placeholder="เหตุผล เช่น ปิดหน่วย/อบรมทั้งแผนก" class="mt-2 w-full rounded-lg border border-rose-100 p-2 text-sm focus:outline-none focus:ring-1 focus:ring-rose-500">
+                        <button onclick="saveBlockedRequestDate().catch(handleAsyncActionError)" class="mt-2 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700">บันทึกวันงดขอเวร</button>
+                        <div id="admin-blocked-request-list" class="mt-3 space-y-1 text-xs"></div>
+                    </div>
+                </div>
             </div>
 
             <div class="overflow-auto max-h-[520px] border border-gray-100 rounded-xl">
@@ -617,10 +652,13 @@
         let lastPublicHolidaySignature = '';
         let lastRealtimeConnected = false;
         let lastRealtimeCount = 0;
+        let realtimeLoadInFlight = false;
         let transientStatusUntil = 0;
-        const REALTIME_POLL_MIN_MS = 15000;
-        const REALTIME_POLL_MAX_MS = 30000;
-        const WRITE_RETRY_DELAYS_MS = [0, 1200, 3000, 6000];
+        const REALTIME_POLL_MIN_MS = 6000;
+        const REALTIME_POLL_MAX_MS = 10000;
+        const HIDDEN_REALTIME_POLL_MIN_MS = 30000;
+        const HIDDEN_REALTIME_POLL_MAX_MS = 60000;
+        const WRITE_VERIFY_TIMEOUT_MS = 3000;
 
         const levelColors = {
             'Level 1': { bg: 'bg-sky-50 text-sky-700 border-sky-200', dot: 'bg-sky-500' },
@@ -682,6 +720,12 @@
             '2027-12-31': 'วันสิ้นปี'
         };
         let publicHolidays = { ...fallbackPublicHolidays };
+        const defaultRequestRules = {
+            earlyCloseRules: [],
+            blockedDates: []
+        };
+        let requestRules = { ...defaultRequestRules };
+        let lastRequestRulesSignature = '';
 
         document.addEventListener('DOMContentLoaded', async () => {
             initInputs();
@@ -689,6 +733,7 @@
             setupEventListeners();
             await loadStaffFromSheet();
             await loadPublicHolidaysFromSheet({ silent: true });
+            await loadRequestRulesFromSheet({ silent: true });
             await loadShiftRequestsFromSheet({ silent: false });
             renderPositionDropdowns();
             renderUserDropdowns();
@@ -739,9 +784,34 @@
             return new Date(requestedDate.getFullYear(), requestedDate.getMonth() - 2, 25);
         }
 
+        function getRequestMonthKey(dateStr) {
+            return String(dateStr || '').slice(0, 7);
+        }
+
+        function getEarlyCloseRuleForDate(dateStr) {
+            const monthKey = getRequestMonthKey(dateStr);
+            return (requestRules.earlyCloseRules || [])
+                .filter((rule) => rule.requestMonth === monthKey && rule.closeDate)
+                .sort((a, b) => String(a.closeDate).localeCompare(String(b.closeDate)))[0] || null;
+        }
+
+        function getEffectiveRequestDeadline(dateStr) {
+            const regularDeadline = getRequestDeadline(dateStr);
+            const rule = getEarlyCloseRuleForDate(dateStr);
+            if (!rule) return regularDeadline;
+
+            const earlyCloseDate = new Date(`${rule.closeDate}T00:00:00`);
+            if (Number.isNaN(earlyCloseDate.getTime())) return regularDeadline;
+            return earlyCloseDate < regularDeadline ? earlyCloseDate : regularDeadline;
+        }
+
+        function getBlockedRequestRule(dateStr) {
+            return (requestRules.blockedDates || []).find((rule) => rule.date === dateStr) || null;
+        }
+
         function getFirstAllowedUserDate() {
             let candidate = new Date(requestToday.getFullYear(), requestToday.getMonth(), requestToday.getDate());
-            while (requestToday > getRequestDeadline(formatDateInput(candidate))) {
+            while (requestToday > getEffectiveRequestDeadline(formatDateInput(candidate))) {
                 candidate = new Date(candidate.getFullYear(), candidate.getMonth() + 1, 1);
             }
             return candidate;
@@ -1398,6 +1468,82 @@
             return true;
         }
 
+        function normalizeRequestRules(nextRules = {}) {
+            const earlyCloseRules = (nextRules.earlyCloseRules || [])
+                .map((rule) => ({
+                    id: String(rule.id || `${rule.requestMonth || ''}-${rule.closeDate || ''}`).trim(),
+                    requestMonth: String(rule.requestMonth || '').trim(),
+                    closeDate: String(rule.closeDate || '').trim(),
+                    reason: String(rule.reason || '').trim()
+                }))
+                .filter((rule) => /^\d{4}-\d{2}$/.test(rule.requestMonth) && /^\d{4}-\d{2}-\d{2}$/.test(rule.closeDate))
+                .sort((a, b) => a.requestMonth.localeCompare(b.requestMonth) || a.closeDate.localeCompare(b.closeDate));
+
+            const blockedDates = (nextRules.blockedDates || [])
+                .map((rule) => ({
+                    id: String(rule.id || rule.date || '').trim(),
+                    date: String(rule.date || '').trim(),
+                    reason: String(rule.reason || '').trim()
+                }))
+                .filter((rule) => /^\d{4}-\d{2}-\d{2}$/.test(rule.date))
+                .sort((a, b) => a.date.localeCompare(b.date));
+
+            return { earlyCloseRules, blockedDates };
+        }
+
+        function getRequestRulesSignature(nextRules = requestRules) {
+            return JSON.stringify(normalizeRequestRules(nextRules));
+        }
+
+        function applyRequestRules(nextRules) {
+            const normalizedRules = normalizeRequestRules(nextRules);
+            const nextSignature = getRequestRulesSignature(normalizedRules);
+            if (nextSignature === lastRequestRulesSignature) return false;
+            requestRules = normalizedRules;
+            lastRequestRulesSignature = nextSignature;
+            renderRequestRulesSettings();
+            applyDateLimits();
+            const startInput = document.getElementById('form-start-date');
+            if (currentRole === 'user' && startInput && startInput.value && requestToday > getEffectiveRequestDeadline(startInput.value)) {
+                setDefaultRequestDates(true);
+                showFirstAllowedUserMonth();
+                renderCalendar();
+            }
+            return true;
+        }
+
+        async function loadRequestRulesFromSheet({ silent = true } = {}) {
+            const response = await requestAppsScriptJsonp('getRequestRules');
+            if (!response || !response.ok || !response.rules) {
+                if (!silent) {
+                    console.warn(response?.message || 'โหลดกฎการเปิดรับคำขอจาก Google Sheet ไม่สำเร็จ');
+                }
+                return false;
+            }
+
+            applyRequestRules(response.rules);
+            return true;
+        }
+
+        async function saveRequestRulesToSheet() {
+            const rules = normalizeRequestRules(requestRules);
+            const saved = await postAppsScriptNoCors({
+                timestamp: new Date().toISOString(),
+                role: currentRole,
+                action: 'SAVE_REQUEST_RULES',
+                detail: { rules }
+            });
+            if (!saved) {
+                showTransientStatus('บันทึกกฎการเปิดรับไม่สำเร็จ', 'bg-red-600 text-white', 8000);
+                return false;
+            }
+
+            applyRequestRules(rules);
+            showTransientStatus('บันทึกกฎการเปิดรับสำเร็จ', 'bg-emerald-600 text-white');
+            setTimeout(() => loadRequestRulesFromSheet({ silent: true }), 1500);
+            return true;
+        }
+
         function saveStaffToSheet() {
             const payload = {
                 action: 'SAVE_STAFF',
@@ -1499,34 +1645,39 @@
         }
 
         async function loadShiftRequestsFromSheet({ silent = true } = {}) {
-            const response = await requestAppsScriptJsonp('getRequests');
-            if (!response || !response.ok) {
-                updateRealtimeStatus(false);
-                if (!silent) alert(response?.message || 'โหลดข้อมูลคำขอเวรจาก Google Sheet ไม่สำเร็จ');
-                return false;
+            if (realtimeLoadInFlight) return true;
+            realtimeLoadInFlight = true;
+            try {
+                const response = await requestAppsScriptJsonp('getRequests');
+                if (!response || !response.ok) {
+                    updateRealtimeStatus(false);
+                    if (!silent) alert(response?.message || 'โหลดข้อมูลคำขอเวรจาก Google Sheet ไม่สำเร็จ');
+                    return false;
+                }
+
+                const nextRequests = normalizeShiftRequests(response.requests || []);
+                const nextSignature = getRealtimeSignature(nextRequests);
+                updateRealtimeStatus(true, nextRequests.length);
+                if (nextSignature === lastRealtimeSignature) return true;
+
+                shiftRequests = nextRequests;
+                lastRealtimeSignature = nextSignature;
+                renderCalendar();
+                renderAdminReserveQueue();
+                if (!document.getElementById('admin-heatmap-view').classList.contains('hidden')) {
+                    renderAdminHeatmap(false);
+                }
+                return true;
+            } finally {
+                realtimeLoadInFlight = false;
             }
-
-            const nextRequests = normalizeShiftRequests(response.requests || []);
-            const nextSignature = getRealtimeSignature(nextRequests);
-            updateRealtimeStatus(true, nextRequests.length);
-            if (nextSignature === lastRealtimeSignature) return true;
-
-            shiftRequests = nextRequests;
-            lastRealtimeSignature = nextSignature;
-            renderCalendar();
-            renderAdminReserveQueue();
-            if (!document.getElementById('admin-heatmap-view').classList.contains('hidden')) {
-                renderAdminHeatmap(false);
-            }
-            return true;
-        }
-
-        function sleep(ms) {
-            return new Promise((resolve) => setTimeout(resolve, ms));
         }
 
         function getRandomRealtimePollDelay() {
-            return REALTIME_POLL_MIN_MS + Math.floor(Math.random() * (REALTIME_POLL_MAX_MS - REALTIME_POLL_MIN_MS + 1));
+            const isHidden = document.visibilityState === 'hidden';
+            const minDelay = isHidden ? HIDDEN_REALTIME_POLL_MIN_MS : REALTIME_POLL_MIN_MS;
+            const maxDelay = isHidden ? HIDDEN_REALTIME_POLL_MAX_MS : REALTIME_POLL_MAX_MS;
+            return minDelay + Math.floor(Math.random() * (maxDelay - minDelay + 1));
         }
 
         function scheduleNextRealtimePoll(delay = getRandomRealtimePollDelay()) {
@@ -1541,8 +1692,16 @@
             if (realtimeTimerId) clearTimeout(realtimeTimerId);
             if (holidaySyncTimerId) clearInterval(holidaySyncTimerId);
             scheduleNextRealtimePoll();
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    scheduleRealtimeRefresh(150);
+                } else {
+                    scheduleNextRealtimePoll();
+                }
+            });
             holidaySyncTimerId = setInterval(() => {
                 loadPublicHolidaysFromSheet();
+                loadRequestRulesFromSheet({ silent: true });
             }, 60000);
         }
 
@@ -1584,6 +1743,31 @@
             showTransientStatus('บันทึกล้มเหลว: ระบบทำงานผิดพลาด', 'bg-red-600 text-white', 8000);
         }
 
+        function postAppsScriptNoCors(payload) {
+            if (!GOOGLE_SHEET_LOG_URL) return Promise.resolve(false);
+            return fetch(GOOGLE_SHEET_LOG_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            })
+                .then(() => true)
+                .catch((error) => {
+                    console.warn('Cannot fallback write to Google Sheet', error);
+                    return false;
+                });
+        }
+
+        async function verifyWriteInBackground(action, detail, payload) {
+            const response = await requestAppsScriptJsonp('syncRequest', {
+                writeAction: action,
+                detail: JSON.stringify(detail),
+                role: currentRole,
+                timestamp: detail.timestamp || payload.timestamp
+            }, WRITE_VERIFY_TIMEOUT_MS);
+            return Boolean(response && response.ok);
+        }
+
         function scheduleRealtimeRefresh(delay = 600) {
             clearTimeout(realtimeRefreshTimerId);
             realtimeRefreshTimerId = setTimeout(async () => {
@@ -1611,35 +1795,30 @@
                 return true;
             }
 
-            let lastErrorMessage = '';
-            for (let attempt = 0; attempt < WRITE_RETRY_DELAYS_MS.length; attempt += 1) {
-                if (WRITE_RETRY_DELAYS_MS[attempt] > 0) {
-                    showTransientStatus(`กำลังบันทึก... ลองใหม่ครั้งที่ ${attempt}`, 'bg-amber-500 text-white', 12000);
-                    await sleep(WRITE_RETRY_DELAYS_MS[attempt]);
-                } else {
-                    showTransientStatus('กำลังบันทึก...', 'bg-amber-500 text-white', 12000);
-                }
-
-                const response = await requestAppsScriptJsonp('syncRequest', {
-                    writeAction: action,
-                    detail: JSON.stringify(detail),
-                    role: currentRole,
-                    timestamp: detail.timestamp || payload.timestamp
-                }, 20000);
-
-                if (response && response.ok) {
-                    showTransientStatus(successText, 'bg-emerald-600 text-white');
-                    if (refresh) {
-                        await loadShiftRequestsFromSheet();
-                        scheduleNextRealtimePoll();
-                    }
-                    return true;
-                }
-                lastErrorMessage = response?.message || 'เชื่อมต่อ Google Sheet ไม่สำเร็จ';
+            showTransientStatus('กำลังบันทึก...', 'bg-amber-500 text-white', 5000);
+            const sent = await postAppsScriptNoCors(payload);
+            if (!sent) {
+                showTransientStatus(`${failureText}: เชื่อมต่อ Google Sheet ไม่สำเร็จ`, 'bg-red-600 text-white', 8000);
+                return false;
             }
 
-            showTransientStatus(`${failureText}: ${lastErrorMessage}`, 'bg-red-600 text-white', 8000);
-            return false;
+            showTransientStatus(successText, 'bg-emerald-600 text-white');
+            if (refresh) {
+                scheduleRealtimeRefresh(250);
+            }
+
+            verifyWriteInBackground(action, detail, payload)
+                .then((verified) => {
+                    if (!verified) {
+                        showTransientStatus('ส่งบันทึกแล้ว รอ sync จาก Google Sheet', 'bg-amber-500 text-white', 6000);
+                    }
+                    if (refresh) scheduleRealtimeRefresh(1500);
+                })
+                .catch((error) => {
+                    console.warn('Cannot verify write quickly', error);
+                    if (refresh) scheduleRealtimeRefresh(1500);
+                });
+            return true;
         }
 
         function requestAdminPassword() {
@@ -1839,6 +2018,65 @@
                 dates: getRequestDates(request).slice(),
                 timestamp: request.timestamp instanceof Date ? new Date(request.timestamp) : request.timestamp
             }));
+        }
+
+        function getNextMonthStartDate(date = requestToday) {
+            return formatDateInput(new Date(date.getFullYear(), date.getMonth() + 1, 1));
+        }
+
+        function getCreateActionForRequest(request) {
+            return request.status === 'Approved' ? 'CREATE_APPROVED_REQUEST' : 'CREATE_PENDING_REQUEST';
+        }
+
+        function getLevelChangeWritesForFutureRequests(user, oldLevel, newLevel, effectiveDate) {
+            const writes = [];
+            shiftRequests
+                .filter((request) => isSameRequestUser(request, user) && request.level === oldLevel)
+                .forEach((request) => {
+                    const requestDates = getRequestDates(request).slice().sort();
+                    const futureDates = requestDates.filter((date) => date >= effectiveDate);
+                    if (!futureDates.length) return;
+
+                    const historicalDates = requestDates.filter((date) => date < effectiveDate);
+                    if (!historicalDates.length) {
+                        request.level = newLevel;
+                        writes.push({
+                            action: 'EDIT_REQUEST_DATES',
+                            detail: getRequestLogDetail(request)
+                        });
+                        return;
+                    }
+
+                    const historicalRanges = groupConsecutiveDateRanges(historicalDates);
+                    const futureRanges = groupConsecutiveDateRanges(futureDates);
+                    const firstHistoricalRange = historicalRanges[0];
+                    request.startDate = firstHistoricalRange.startDate;
+                    request.endDate = firstHistoricalRange.endDate;
+                    request.dates = firstHistoricalRange.dates;
+                    request.level = oldLevel;
+                    delete request.date;
+                    writes.push({
+                        action: 'EDIT_REQUEST_DATES',
+                        detail: getRequestLogDetail(request)
+                    });
+
+                    futureRanges.forEach((range) => {
+                        const splitRequest = {
+                            ...request,
+                            id: createUniqueRequestId(),
+                            startDate: range.startDate,
+                            endDate: range.endDate,
+                            dates: range.dates,
+                            level: newLevel
+                        };
+                        shiftRequests.push(splitRequest);
+                        writes.push({
+                            action: getCreateActionForRequest(splitRequest),
+                            detail: getRequestLogDetail(splitRequest)
+                        });
+                    });
+                });
+            return writes;
         }
 
         function isWeekend(dateStr) {
@@ -2153,10 +2391,21 @@
                     return;
                 }
 
-                const missedDeadlineDate = requestedDates.find((date) => requestToday > getRequestDeadline(date));
+                const blockedRequestDate = requestedDates.find((date) => getBlockedRequestRule(date));
+                if (blockedRequestDate) {
+                    const blockedRule = getBlockedRequestRule(blockedRequestDate);
+                    alert(`ไม่สามารถขอเวรวันที่ ${formatDisplayDate(blockedRequestDate)} ได้${blockedRule.reason ? ` เนื่องจาก${blockedRule.reason}` : ''}`);
+                    return;
+                }
+
+                const missedDeadlineDate = requestedDates.find((date) => requestToday > getEffectiveRequestDeadline(date));
                 if (missedDeadlineDate) {
-                    const deadline = getRequestDeadline(missedDeadlineDate);
-                    alert(`ไม่สามารถขอเวรวันที่ ${formatDisplayDate(missedDeadlineDate)} ได้ เพราะต้องขอภายในวันที่ ${formatThaiDate(deadline)}`);
+                    const deadline = getEffectiveRequestDeadline(missedDeadlineDate);
+                    const earlyCloseRule = getEarlyCloseRuleForDate(missedDeadlineDate);
+                    const reasonText = earlyCloseRule && earlyCloseRule.reason
+                        ? ` เหตุผล: ${earlyCloseRule.reason}`
+                        : '';
+                    alert(`ไม่สามารถขอเวรวันที่ ${formatDisplayDate(missedDeadlineDate)} ได้ เพราะต้องขอภายในวันที่ ${formatThaiDate(deadline)}${reasonText}`);
                     return;
                 }
             }
@@ -2470,17 +2719,43 @@
             }
         };
 
-        window.changeUserLevel = function(userId, userName, newLevel) {
+        window.changeUserLevel = async function(userId, userName, newLevel) {
             const user = findUserById(userId, userName);
             if (user) {
                 const oldLevel = user.level;
+                if (oldLevel === newLevel) return;
+
+                const effectiveDate = getNextMonthStartDate();
+                const confirmText = `เปลี่ยน Level ของ ${user.name} จาก ${oldLevel} เป็น ${newLevel}\n\nการเปลี่ยนนี้จะมีผลตั้งแต่ ${formatDisplayDate(effectiveDate)} เป็นต้นไปเท่านั้น\nข้อมูลย้อนหลังและเดือนปัจจุบันจะคง Level เดิมไว้\n\nยืนยันหรือไม่?`;
+                if (!confirm(confirmText)) {
+                    refreshAdminViews();
+                    return;
+                }
+
+                const beforeRequests = cloneShiftRequestsSnapshot();
                 user.level = newLevel;
-                shiftRequests.forEach((request) => {
-                    if (isSameRequestUser(request, user)) request.level = newLevel;
-                });
                 if (!levels.includes(newLevel)) levels.push(newLevel);
+                const writes = getLevelChangeWritesForFutureRequests(user, oldLevel, newLevel, effectiveDate);
+
+                for (const item of writes) {
+                    const saved = await logAction(item.action, item.detail, {
+                        refresh: false,
+                        successText: 'บันทึกการเปลี่ยน Level สำเร็จ',
+                        failureText: 'บันทึกการเปลี่ยน Level ไม่สำเร็จ'
+                    });
+                    if (!saved) {
+                        user.level = oldLevel;
+                        shiftRequests = beforeRequests;
+                        refreshAdminViews();
+                        alert('บันทึกการเปลี่ยน Level ลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
+                        return;
+                    }
+                }
+
                 refreshAdminViews();
                 saveStaffToSheet();
+                scheduleRealtimeRefresh(1200);
+                alert(`เปลี่ยน Level เรียบร้อยแล้ว มีผลตั้งแต่ ${formatDisplayDate(effectiveDate)} เป็นต้นไป`);
             }
         };
 
@@ -2672,7 +2947,7 @@
             saveStaffToSheet();
         };
 
-        window.changeLevelName = function(oldLevel, newLevel) {
+        window.changeLevelName = async function(oldLevel, newLevel) {
             const nextLevel = newLevel.trim();
             if (!nextLevel || nextLevel === oldLevel) return;
             if (levels.includes(nextLevel)) {
@@ -2680,16 +2955,42 @@
                 refreshAdminViews();
                 return;
             }
+            const effectiveDate = getNextMonthStartDate();
+            const affectedUsers = users.filter((user) => user.level === oldLevel);
+            const confirmText = `เปลี่ยนชื่อ ${oldLevel} เป็น ${nextLevel}\n\nจะมีผลกับเจ้าหน้าที่และคำขอตั้งแต่ ${formatDisplayDate(effectiveDate)} เป็นต้นไปเท่านั้น\nข้อมูลย้อนหลังและเดือนปัจจุบันจะคง ${oldLevel} ไว้\n\nยืนยันหรือไม่?`;
+            if (!confirm(confirmText)) {
+                refreshAdminViews();
+                return;
+            }
+
+            const beforeUsers = users.map((user) => ({ ...user }));
+            const beforeRequests = cloneShiftRequestsSnapshot();
             const index = levels.indexOf(oldLevel);
             if (index >= 0) levels[index] = nextLevel;
-            users.forEach((user) => {
-                if (user.level === oldLevel) user.level = nextLevel;
+            const writes = [];
+            affectedUsers.forEach((user) => {
+                user.level = nextLevel;
+                writes.push(...getLevelChangeWritesForFutureRequests(user, oldLevel, nextLevel, effectiveDate));
             });
-            shiftRequests.forEach((request) => {
-                if (request.level === oldLevel) request.level = nextLevel;
-            });
+
+            for (const item of writes) {
+                const saved = await logAction(item.action, item.detail, {
+                    refresh: false,
+                    successText: 'บันทึกการเปลี่ยน Level สำเร็จ',
+                    failureText: 'บันทึกการเปลี่ยน Level ไม่สำเร็จ'
+                });
+                if (!saved) {
+                    users = beforeUsers;
+                    shiftRequests = beforeRequests;
+                    refreshAdminViews();
+                    alert('บันทึกการเปลี่ยน Level ลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
+                    return;
+                }
+            }
+
             refreshAdminViews();
             saveStaffToSheet();
+            scheduleRealtimeRefresh(1200);
         };
 
         window.deleteShift = async function(requestId) {
@@ -3028,7 +3329,7 @@
                         </select>
                     </td>
                     <td class="p-3">
-                        <select onchange="changeUserLevel(${userIdArg}, ${userNameArg}, this.value)" class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
+                        <select onchange="changeUserLevel(${userIdArg}, ${userNameArg}, this.value).catch(handleAsyncActionError)" class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
                             ${levels.map((level) => `<option value="${level}" ${user.level === level ? 'selected' : ''}>${level}</option>`).join('')}
                         </select>
                     </td>
@@ -3065,7 +3366,117 @@
 
             renderAdminAddPanel();
             renderAdminSelectedList();
+            renderRequestRulesSettings();
         }
+
+        function getDefaultEarlyCloseMonth() {
+            return formatDateInput(getFirstAllowedUserDate()).slice(0, 7);
+        }
+
+        function renderRequestRulesSettings() {
+            const earlyCloseMonth = document.getElementById('admin-early-close-month');
+            const earlyCloseDate = document.getElementById('admin-early-close-date');
+            const earlyCloseReason = document.getElementById('admin-early-close-reason');
+            const earlyCloseList = document.getElementById('admin-early-close-list');
+            const blockedDateInput = document.getElementById('admin-blocked-request-date');
+            const blockedReason = document.getElementById('admin-blocked-request-reason');
+            const blockedList = document.getElementById('admin-blocked-request-list');
+            if (!earlyCloseMonth || !earlyCloseDate || !earlyCloseReason || !earlyCloseList || !blockedDateInput || !blockedReason || !blockedList) return;
+
+            if (!earlyCloseMonth.value) earlyCloseMonth.value = getDefaultEarlyCloseMonth();
+            if (!blockedDateInput.value) blockedDateInput.value = formatDateInput(getFirstAllowedUserDate());
+
+            earlyCloseList.innerHTML = (requestRules.earlyCloseRules || []).length
+                ? requestRules.earlyCloseRules.map((rule) => `
+                    <div class="flex items-center justify-between gap-2 rounded-md border border-rose-100 bg-rose-50 px-2 py-1">
+                        <span class="min-w-0">
+                            <strong>${rule.requestMonth}</strong> ปิดรับ ${formatDisplayDate(rule.closeDate)}
+                            ${rule.reason ? `<span class="text-rose-700"> • ${rule.reason}</span>` : ''}
+                        </span>
+                        <button onclick="deleteEarlyCloseRule('${escapeInlineValue(rule.id)}').catch(handleAsyncActionError)" class="shrink-0 font-semibold text-red-600 hover:text-red-800">ลบ</button>
+                    </div>
+                `).join('')
+                : '<div class="rounded-md border border-dashed border-rose-100 p-2 text-gray-500">ยังไม่ตั้งค่าปิดรับก่อนกำหนด</div>';
+
+            blockedList.innerHTML = (requestRules.blockedDates || []).length
+                ? requestRules.blockedDates.map((rule) => `
+                    <div class="flex items-center justify-between gap-2 rounded-md border border-rose-100 bg-rose-50 px-2 py-1">
+                        <span class="min-w-0">
+                            <strong>${formatDisplayDate(rule.date)}</strong>
+                            ${rule.reason ? `<span class="text-rose-700"> • ${rule.reason}</span>` : ''}
+                        </span>
+                        <button onclick="deleteBlockedRequestDate('${escapeInlineValue(rule.id)}').catch(handleAsyncActionError)" class="shrink-0 font-semibold text-red-600 hover:text-red-800">ลบ</button>
+                    </div>
+                `).join('')
+                : '<div class="rounded-md border border-dashed border-rose-100 p-2 text-gray-500">ยังไม่มีวันที่งดขอเวร</div>';
+        }
+
+        window.saveEarlyCloseRule = async function() {
+            const requestMonth = document.getElementById('admin-early-close-month').value;
+            const closeDate = document.getElementById('admin-early-close-date').value;
+            const reason = document.getElementById('admin-early-close-reason').value.trim();
+            if (!requestMonth || !closeDate) {
+                alert('กรุณาเลือกเดือนเวรและวันปิดรับ');
+                return;
+            }
+
+            const regularDeadline = getRequestDeadline(`${requestMonth}-01`);
+            const closeDateValue = new Date(`${closeDate}T00:00:00`);
+            if (closeDateValue >= regularDeadline) {
+                alert(`วันปิดรับก่อนกำหนดต้องอยู่ก่อนวันที่ ${formatThaiDate(regularDeadline)}`);
+                return;
+            }
+
+            requestRules.earlyCloseRules = [
+                ...(requestRules.earlyCloseRules || []).filter((rule) => rule.requestMonth !== requestMonth),
+                {
+                    id: requestMonth,
+                    requestMonth,
+                    closeDate,
+                    reason
+                }
+            ];
+            const saved = await saveRequestRulesToSheet();
+            if (saved) {
+                document.getElementById('admin-early-close-reason').value = '';
+            }
+        };
+
+        window.deleteEarlyCloseRule = async function(ruleId) {
+            requestRules.earlyCloseRules = (requestRules.earlyCloseRules || []).filter((rule) => rule.id !== ruleId);
+            await saveRequestRulesToSheet();
+        };
+
+        window.saveBlockedRequestDate = async function() {
+            const date = document.getElementById('admin-blocked-request-date').value;
+            const reason = document.getElementById('admin-blocked-request-reason').value.trim();
+            if (!date) {
+                alert('กรุณาเลือกวันที่งดขอเวร');
+                return;
+            }
+            if (!reason) {
+                alert('กรุณาระบุเหตุผลที่จะใช้แจ้ง user');
+                return;
+            }
+
+            requestRules.blockedDates = [
+                ...(requestRules.blockedDates || []).filter((rule) => rule.date !== date),
+                {
+                    id: date,
+                    date,
+                    reason
+                }
+            ];
+            const saved = await saveRequestRulesToSheet();
+            if (saved) {
+                document.getElementById('admin-blocked-request-reason').value = '';
+            }
+        };
+
+        window.deleteBlockedRequestDate = async function(ruleId) {
+            requestRules.blockedDates = (requestRules.blockedDates || []).filter((rule) => rule.id !== ruleId);
+            await saveRequestRulesToSheet();
+        };
 
         function renderAdminAddPanel() {
             const typeSelect = document.getElementById('admin-add-type');
@@ -3100,7 +3511,7 @@
                         <select onchange="changeUserPosition(${userIdArg}, ${userNameArg}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
                             ${positions.map((position) => `<option value="${position}" ${user.position === position ? 'selected' : ''}>${position}</option>`).join('')}
                         </select>
-                        <select onchange="changeUserLevel(${userIdArg}, ${userNameArg}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
+                        <select onchange="changeUserLevel(${userIdArg}, ${userNameArg}, this.value).catch(handleAsyncActionError)" class="p-1.5 border border-amber-100 rounded-md">
                             ${levels.map((level) => `<option value="${level}" ${user.level === level ? 'selected' : ''}>${level}</option>`).join('')}
                         </select>
                         <button onclick="deleteUser(${userIdArg}, ${userNameArg})" class="text-red-500 hover:text-red-700 font-semibold">ลบ</button>
@@ -3136,7 +3547,7 @@
             title.innerText = 'รายการ Level เดิม';
             container.innerHTML = levels.map((level) => `
                 <div class="flex items-center gap-2 rounded-lg bg-white p-2 text-xs">
-                    <input value="${level}" onchange="changeLevelName('${escapeInlineValue(level)}', this.value)" class="min-w-0 flex-1 p-1.5 border border-amber-100 rounded-md">
+                    <input value="${level}" onchange="changeLevelName('${escapeInlineValue(level)}', this.value).catch(handleAsyncActionError)" class="min-w-0 flex-1 p-1.5 border border-amber-100 rounded-md">
                     <button onclick="deleteLevel('${escapeInlineValue(level)}')" class="text-red-500 hover:text-red-700 font-semibold">ลบ</button>
                 </div>
             `).join('');
