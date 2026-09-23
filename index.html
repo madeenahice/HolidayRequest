@@ -8,6 +8,8 @@
     <meta name="application-name" content="ขอเวร">
     <meta name="apple-mobile-web-app-title" content="ขอเวร">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
     <link rel="manifest" href="./manifest.webmanifest?v=20260717">
     <link rel="icon" href="./favicon.ico?v=20260717" sizes="any">
     <link rel="icon" href="./assets/app-icon.svg?v=20260717" type="image/svg+xml">
@@ -747,6 +749,7 @@
         let lastRealtimeConnected = false;
         let lastRealtimeCount = 0;
         let realtimeLoadInFlight = false;
+        let isInitialDataLoading = false;
         let transientStatusUntil = 0;
         const REALTIME_POLL_MIN_MS = 6000;
         const REALTIME_POLL_MAX_MS = 10000;
@@ -829,10 +832,9 @@
             initInputs();
             renderLeaveTypeDropdown();
             setupEventListeners();
-            await loadStaffFromSheet();
-            await loadPublicHolidaysFromSheet({ silent: true });
-            await loadRequestRulesFromSheet({ silent: true });
-            await loadShiftRequestsFromSheet({ silent: false });
+            renderLevelLegend();
+            renderCalendar();
+            await loadInitialData();
             renderPositionDropdowns();
             renderUserDropdowns();
             renderRequestSummaryFilters();
@@ -840,7 +842,6 @@
             renderAdminTable();
             renderAdminSettings();
             renderAdminReserveQueue();
-            renderLevelLegend();
             renderCalendar();
             startRealtimeSync();
         });
@@ -1588,6 +1589,46 @@
             levels.splice(0, levels.length, ...nextLevels.sort((a, b) => getLevelOrder(b) - getLevelOrder(a)));
         }
 
+        async function loadInitialData() {
+            isInitialDataLoading = true;
+            const response = await requestAppsScriptJsonpWithRetry('bootstrap', {}, {
+                timeoutMs: JSONP_REQUEST_READ_TIMEOUT_MS,
+                retries: 0
+            });
+
+            if (!response || !response.ok || !response.staff || !response.requests) {
+                isInitialDataLoading = false;
+                await loadStaffFromSheet();
+                await Promise.all([
+                    loadPublicHolidaysFromSheet({ silent: true }),
+                    loadRequestRulesFromSheet({ silent: true })
+                ]);
+                await loadShiftRequestsFromSheet({ silent: false });
+                return false;
+            }
+
+            users = normalizeUsers(response.staff.users || []);
+            refreshMasterLists({
+                departments: response.staff.departments || [],
+                positions: response.staff.positions || [],
+                levels: response.staff.levels || []
+            });
+
+            if (response.holidays && response.holidays.ok && response.holidays.holidays) {
+                applyPublicHolidays(response.holidays.holidays);
+            }
+            if (response.requestRules && response.requestRules.ok && response.requestRules.rules) {
+                applyRequestRules(response.requestRules.rules);
+            }
+
+            const nextRequests = normalizeShiftRequests(response.requests.requests || []);
+            shiftRequests = nextRequests;
+            lastRealtimeSignature = getRealtimeSignature(nextRequests);
+            updateRealtimeStatus(true, nextRequests.length);
+            isInitialDataLoading = false;
+            return true;
+        }
+
         async function loadStaffFromSheet() {
             const response = await requestAppsScriptJsonpWithRetry('getStaff', {}, {
                 timeoutMs: JSONP_LIGHT_READ_TIMEOUT_MS
@@ -1619,6 +1660,7 @@
         }
 
         function refreshHolidayDependentViews() {
+            if (isInitialDataLoading) return;
             renderCalendar();
             const heatmapView = document.getElementById('admin-heatmap-view');
             if (heatmapView && !heatmapView.classList.contains('hidden')) {
@@ -1690,7 +1732,7 @@
             if (currentRole === 'user' && startInput && startInput.value && requestToday > getEffectiveRequestDeadline(startInput.value)) {
                 setDefaultRequestDates(true);
                 showFirstAllowedUserMonth();
-                renderCalendar();
+                if (!isInitialDataLoading) renderCalendar();
             }
             return true;
         }
@@ -2569,7 +2611,11 @@
             const leaveType = document.getElementById('form-leave-type').value;
             const user = findUserById(userId, selectedUser.name);
 
-            if (!user || !startDate || !endDate || !leaveType) return;
+            if (!user) {
+                alert('กรุณาเลือกเจ้าหน้าที่');
+                return;
+            }
+            if (!startDate || !endDate || !leaveType) return;
             if (endDate < startDate) {
                 alert('วันสิ้นสุดต้องไม่มาก่อนวันเริ่มต้น');
                 return;
@@ -3570,12 +3616,21 @@
             const departmentSelect = document.getElementById('form-department-select');
             const positionSelect = document.getElementById('form-position-select');
             const select = document.getElementById('form-user-select');
+            const currentUser = select.value;
             const selectedDepartment = departmentSelect.value || departments[0];
             const selectedPosition = positionSelect.value;
             const filteredUsers = users.filter((user) => user.department === selectedDepartment && user.position === selectedPosition);
-            select.innerHTML = filteredUsers.length
-                ? filteredUsers.map((user) => `<option value="${makeUserSelectValue(user)}">${user.name} (${user.level})</option>`).join('')
-                : '<option value="">ไม่มีเจ้าหน้าที่ในเงื่อนไขนี้</option>';
+            const userOptions = filteredUsers.map((user) => ({
+                value: makeUserSelectValue(user),
+                label: `${user.name} (${user.level})`
+            }));
+            select.innerHTML = `
+                <option value="">เลือกเจ้าหน้าที่</option>
+                ${userOptions.length
+                    ? userOptions.map((user) => `<option value="${user.value}">${user.label}</option>`).join('')
+                    : '<option value="" disabled>ไม่มีเจ้าหน้าที่ในเงื่อนไขนี้</option>'}
+            `;
+            select.value = userOptions.some((user) => user.value === currentUser) ? currentUser : '';
             renderRequestSummaryFilters({ keepDepartment: true, keepPosition: true, keepUser: true });
             renderRequestSummary();
         }
