@@ -1,0 +1,863 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>บันทึกการลา สาย แสกนบัตร</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.datatables.net/2.0.8/css/dataTables.bootstrap5.css" rel="stylesheet">
+  <link href="https://cdn.datatables.net/buttons/3.0.2/css/buttons.bootstrap5.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #F7F6CF;
+      --panel: #ffffff;
+      --ink: #26384f;
+      --muted: #6b7280;
+      --line: #C1B2C6;
+      --teal: #AFD7F6;
+      --teal-dark: #4F80C0;
+      --mint: #96CFCF;
+      --pink: #FBCCE0;
+      --purple: #C1B2C6;
+      --rose: #FEB9D0;
+      --orange: #EFA375;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Sarabun", "Segoe UI", Tahoma, sans-serif;
+    }
+
+    .app {
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 20;
+      width: 250px;
+      background: linear-gradient(180deg, var(--teal-dark), var(--teal));
+      color: #fff;
+      padding: 24px 18px;
+      overflow-y: auto;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .brand-mark {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background: #fff;
+      color: var(--teal-dark);
+      font-weight: 900;
+    }
+
+    .brand strong,
+    .brand span {
+      display: block;
+    }
+
+    .brand span {
+      color: rgba(255,255,255,.78);
+      font-size: .9rem;
+    }
+
+    .main {
+      min-width: 0;
+      margin-left: 250px;
+      padding: 28px;
+    }
+
+    .sidebar-nav {
+      display: grid;
+      gap: 8px;
+      margin-top: 24px;
+    }
+
+    .sidebar-nav button {
+      width: 100%;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      background: transparent;
+      color: #fff;
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 800;
+    }
+
+    .sidebar-nav button:hover,
+    .sidebar-nav button.active {
+      border-color: rgba(255,255,255,.35);
+      background: rgba(255,255,255,.18);
+    }
+
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .subtle {
+      color: var(--muted);
+    }
+
+    .panel,
+    .kpi {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      box-shadow: 0 10px 28px rgba(79, 128, 192, .14);
+    }
+
+    .panel-head {
+      min-height: 58px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .panel-head h2 {
+      margin: 0;
+      font-size: 1.08rem;
+      font-weight: 900;
+    }
+
+    .filter-panel {
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+
+    .kpi {
+      padding: 18px;
+      min-height: 112px;
+    }
+
+    .kpi span {
+      display: block;
+      color: var(--muted);
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .kpi strong {
+      color: var(--teal-dark);
+      font-size: clamp(1.9rem, 4vw, 2.6rem);
+      line-height: 1;
+    }
+
+    .btn-primary {
+      --bs-btn-bg: var(--teal-dark);
+      --bs-btn-border-color: var(--teal-dark);
+      --bs-btn-hover-bg: #416da6;
+      --bs-btn-hover-border-color: #416da6;
+      --bs-btn-active-bg: #365e95;
+      --bs-btn-active-border-color: #365e95;
+    }
+
+    .dt-buttons .btn-secondary {
+      --bs-btn-bg: var(--teal-dark);
+      --bs-btn-border-color: var(--teal-dark);
+      --bs-btn-hover-bg: #416da6;
+      --bs-btn-hover-border-color: #416da6;
+      --bs-btn-active-bg: #365e95;
+      --bs-btn-active-border-color: #365e95;
+    }
+
+    .form-select:focus,
+    .form-control:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 .25rem rgba(175, 215, 246, .45);
+    }
+
+    .month-btn {
+      min-width: 44px;
+      min-height: 30px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: var(--mint);
+      color: var(--teal-dark);
+      font-weight: 900;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .month-btn:hover,
+    .month-btn:focus {
+      background: var(--teal-dark);
+      color: #fff;
+      outline: none;
+    }
+
+    .source-badge {
+      border-radius: 999px;
+      padding: .34rem .62rem;
+      font-weight: 800;
+      background: var(--mint);
+      color: var(--teal-dark);
+    }
+
+    .source-badge.late {
+      background: var(--rose);
+      color: #7e4050;
+    }
+
+    .source-badge.noscan {
+      background: var(--purple);
+      color: #65456f;
+    }
+
+    .table-hover > tbody > tr:hover > * {
+      --bs-table-bg-state: rgba(175, 215, 246, .18);
+    }
+
+    .loading {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: rgba(247, 246, 207, .82);
+      color: var(--teal-dark);
+      font-weight: 900;
+    }
+
+    .loading.show {
+      display: flex;
+    }
+
+    @media (max-width: 992px) {
+      .sidebar {
+        position: static;
+        width: auto;
+        padding: 14px 18px;
+      }
+
+      .main {
+        margin-left: 0;
+        padding: 18px;
+      }
+
+      .page-header {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">HR</div>
+        <div>
+          <strong>Leave & Time</strong>
+          <span>ปีงบ ต.ค. - ก.ย.</span>
+        </div>
+      </div>
+      <p class="mb-0">สรุปการลา สาย และไม่ได้สแกนบัตรจาก Google Sheets</p>
+      <nav class="sidebar-nav" aria-label="Dashboard views">
+        <button id="showLeaveSummary" class="active" type="button">สรุปวันลา</button>
+        <button id="showLateSummary" type="button">สาย</button>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="page-header">
+        <div>
+          <h1>บันทึกการลา สาย แสกนบัตร</h1>
+          <div class="subtle">Dashboard รายเดือน แยกตามปีงบ หน่วยงาน และตำแหน่ง</div>
+        </div>
+        <button class="btn btn-primary" id="refreshBtn" type="button">โหลดข้อมูลใหม่</button>
+      </header>
+
+      <section class="panel filter-panel">
+        <div class="row g-3">
+          <div class="col-12 col-lg-3">
+            <label class="form-label" for="fiscalYear">ปีงบ</label>
+            <select class="form-select" id="fiscalYear"></select>
+          </div>
+          <div class="col-12 col-lg-3">
+            <label class="form-label" for="leaveTypeFilter">ประเภทการลา</label>
+            <select class="form-select" id="leaveTypeFilter"><option value="All">All</option></select>
+          </div>
+          <div class="col-12 col-lg-3">
+            <label class="form-label" for="departmentFilter">หน่วยงาน</label>
+            <select class="form-select" id="departmentFilter"><option value="All">All</option></select>
+          </div>
+          <div class="col-12 col-lg-3">
+            <label class="form-label" for="positionFilter">ตำแหน่ง</label>
+            <select class="form-select" id="positionFilter"><option value="All">All</option></select>
+          </div>
+        </div>
+      </section>
+
+      <section class="row g-3 mb-4">
+        <div class="col-12 col-md-6 col-xl-3"><div class="kpi"><span>บุคลากรทั้งหมด</span><strong id="peopleCount">0</strong></div></div>
+        <div class="col-12 col-md-6 col-xl-3"><div class="kpi"><span>วันลารวม</span><strong id="leaveDays">0</strong></div></div>
+        <div class="col-12 col-md-6 col-xl-3"><div class="kpi"><span>จำนวนครั้งมาสาย</span><strong id="lateDays">0</strong></div></div>
+        <div class="col-12 col-md-6 col-xl-3"><div class="kpi"><span>จำนวนครั้งไม่ได้สแกนบัตร</span><strong id="noScanDays">0</strong></div></div>
+      </section>
+
+      <section class="panel mb-4" id="leaveSummaryPanel">
+        <div class="panel-head">
+          <div>
+            <h2>สรุปวันลาของแต่ละคนรายเดือน</h2>
+            <span class="subtle" id="monthlySummaryLabel">รายชื่อ | ต.ค. | พ.ย. | ... | ก.ย. | รวม</span>
+          </div>
+          <span class="subtle" id="personMonthlyCount">0 คน</span>
+        </div>
+        <div class="table-responsive p-3">
+          <table class="table table-hover align-middle w-100" id="personMonthlyTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel d-none" id="lateSummaryPanel">
+        <div class="panel-head">
+          <div>
+            <h2>บุคลากรที่มาสายบ่อย</h2>
+            <span class="subtle">รวมจำนวนครั้งมาสาย แยกเวรจริงและเวร OT</span>
+          </div>
+          <span class="subtle" id="latePeopleCount">0 คน</span>
+        </div>
+        <div class="table-responsive p-3">
+          <table class="table table-hover align-middle w-100" id="frequentLateTable">
+            <thead>
+              <tr>
+                <th>ลำดับ</th>
+                <th>รายชื่อ</th>
+                <th>หน่วยงาน</th>
+                <th>ตำแหน่ง</th>
+                <th>จำนวนครั้งมาสาย</th>
+                <th>เวรจริง</th>
+                <th>เวร OT</th>
+                <th>วันที่ล่าสุด</th>
+                <th>รายละเอียด</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal fade" id="detailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title" id="detailTitle">รายละเอียด</h5>
+            <small class="subtle" id="detailSubtitle"></small>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="detailBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container position-fixed top-0 end-0 p-3">
+    <div class="toast text-bg-danger border-0" id="errorToast" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body" id="errorMessage">เกิดข้อผิดพลาด</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="spinner-border text-primary" role="status"></div>
+    <span>กำลังโหลดข้อมูล...</span>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.datatables.net/2.0.8/js/dataTables.js"></script>
+  <script src="https://cdn.datatables.net/2.0.8/js/dataTables.bootstrap5.js"></script>
+  <script src="https://cdn.datatables.net/buttons/3.0.2/js/dataTables.buttons.js"></script>
+  <script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.bootstrap5.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.html5.js"></script>
+  <script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.print.js"></script>
+  <script>
+    const state = {
+      dashboard: null,
+      activeView: 'leave',
+      tables: {},
+      tooltips: []
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      bindEvents();
+      loadYears();
+    });
+
+    function bindEvents() {
+      document.getElementById('refreshBtn').addEventListener('click', () => loadDashboard());
+      document.getElementById('fiscalYear').addEventListener('change', () => loadDashboard({ resetFilters: true }));
+      document.getElementById('departmentFilter').addEventListener('change', loadDashboard);
+      document.getElementById('positionFilter').addEventListener('change', loadDashboard);
+      document.getElementById('leaveTypeFilter').addEventListener('change', () => {
+        if (state.dashboard) renderDashboard(state.dashboard);
+      });
+      document.getElementById('showLeaveSummary').addEventListener('click', () => setDashboardView('leave'));
+      document.getElementById('showLateSummary').addEventListener('click', () => setDashboardView('late'));
+      document.getElementById('personMonthlyTable').addEventListener('click', event => {
+        const button = event.target.closest('.month-btn');
+        if (button) openPersonMonthDetail(button.dataset.person, button.dataset.month);
+      });
+      document.getElementById('frequentLateTable').addEventListener('click', event => {
+        const button = event.target.closest('.late-detail-btn');
+        if (button) openLatePersonDetail(Number(button.dataset.index));
+      });
+    }
+
+    function loadYears() {
+      setLoading(true);
+      google.script.run
+        .withSuccessHandler(years => {
+          document.getElementById('fiscalYear').innerHTML = years
+            .map(year => `<option value="${escapeHtml(year)}">${escapeHtml(year)}</option>`)
+            .join('');
+          loadDashboard({ resetFilters: true });
+        })
+        .withFailureHandler(showError)
+        .getYears();
+    }
+
+    function loadDashboard(options = {}) {
+      const filters = {
+        fiscalYear: document.getElementById('fiscalYear').value,
+        department: options.resetFilters ? 'All' : document.getElementById('departmentFilter').value,
+        position: options.resetFilters ? 'All' : document.getElementById('positionFilter').value
+      };
+
+      setLoading(true);
+      google.script.run
+        .withSuccessHandler(data => {
+          state.dashboard = data;
+          renderDashboard(data, options);
+          setLoading(false);
+        })
+        .withFailureHandler(showError)
+        .getDashboard(filters);
+    }
+
+    function renderDashboard(data, options = {}) {
+      renderFilters(data, options.resetFilters);
+      const selectedLeaveType = document.getElementById('leaveTypeFilter').value;
+      const personMonthlySummary = filterPersonMonthlySummary(data.personMonthlySummary, selectedLeaveType);
+      renderKpis(data.summary, personMonthlySummary, selectedLeaveType);
+      renderPersonMonthlyTable(personMonthlySummary, data.fiscalYear, selectedLeaveType);
+      renderFrequentLateTable(data.frequentLatePeople || []);
+      setDashboardView(state.activeView);
+    }
+
+    function setDashboardView(view) {
+      state.activeView = view === 'late' ? 'late' : 'leave';
+      document.getElementById('leaveSummaryPanel').classList.toggle('d-none', state.activeView !== 'leave');
+      document.getElementById('lateSummaryPanel').classList.toggle('d-none', state.activeView !== 'late');
+      document.getElementById('showLeaveSummary').classList.toggle('active', state.activeView === 'leave');
+      document.getElementById('showLateSummary').classList.toggle('active', state.activeView === 'late');
+      setTimeout(() => {
+        Object.values(state.tables).forEach(table => {
+          if (table && table.columns) table.columns.adjust();
+        });
+      }, 0);
+    }
+
+    function renderFilters(data, resetFilters) {
+      fillSelect('fiscalYear', data.years, data.fiscalYear);
+      fillSelect('leaveTypeFilter', ['All', ...getAvailableLeaveTypes(data)], resetFilters ? 'All' : document.getElementById('leaveTypeFilter').value);
+      fillSelect('departmentFilter', ['All', ...data.filters.departments], resetFilters ? 'All' : document.getElementById('departmentFilter').value);
+      fillSelect('positionFilter', ['All', ...data.filters.positions], resetFilters ? 'All' : document.getElementById('positionFilter').value);
+    }
+
+    function fillSelect(id, values, selected) {
+      const element = document.getElementById(id);
+      if (!element) return;
+      element.innerHTML = values.map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('');
+      element.value = values.includes(selected) ? selected : values[0] || '';
+    }
+
+    function getAvailableLeaveTypes(data) {
+      const leaveTypes = new Set();
+      ((data.personMonthlySummary && data.personMonthlySummary.people) || []).forEach(person => {
+        Object.values(person.months || {}).forEach(bucket => {
+          (bucket.items || []).forEach(item => {
+            if (item.category === 'ลา' && item.type) leaveTypes.add(item.type);
+          });
+        });
+      });
+      return [...leaveTypes].sort((a, b) => a.localeCompare(b, 'th'));
+    }
+
+    function filterPersonMonthlySummary(summary, selectedLeaveType) {
+      if (!summary || !selectedLeaveType || selectedLeaveType === 'All') return summary;
+      const people = (summary.people || []).map(person => {
+        const months = {};
+        let total = 0;
+
+        (summary.months || []).forEach(month => {
+          const bucket = (person.months && person.months[month.key]) || {};
+          const items = (bucket.items || []).filter(item => item.category === 'ลา' && item.type === selectedLeaveType);
+          const value = items.reduce((sum, item) => sum + getMetricValue(item), 0);
+          total += value;
+          months[month.key] = {
+            ...bucket,
+            items,
+            value,
+            count: items.length,
+            byCategory: value ? { 'ลา': value } : {}
+          };
+        });
+
+        return { ...person, months, total };
+      }).filter(person => person.total > 0);
+
+      return { ...summary, people };
+    }
+
+    function getSummaryLeaveDays(personMonthlySummary) {
+      return ((personMonthlySummary && personMonthlySummary.people) || [])
+        .reduce((sum, person) => sum + (Number(person.total) || 0), 0);
+    }
+
+    function renderKpis(summary, personMonthlySummary = null, selectedLeaveType = 'All') {
+      document.getElementById('peopleCount').textContent = formatNumber(summary.peopleCount);
+      document.getElementById('leaveDays').textContent = formatNumber(
+        selectedLeaveType && selectedLeaveType !== 'All'
+          ? getSummaryLeaveDays(personMonthlySummary)
+          : summary.leaveDays
+      );
+      document.getElementById('lateDays').textContent = formatNumber(summary.lateDays);
+      document.getElementById('noScanDays').textContent = formatNumber(summary.noScanDays);
+    }
+
+    function renderPersonMonthlyTable(summary, fiscalYear, selectedLeaveType = 'All') {
+      const tableId = 'personMonthlyTable';
+      const table = document.getElementById(tableId);
+      const months = summary && summary.months ? summary.months : [];
+      const people = summary && summary.people ? summary.people : [];
+
+      disposeTooltips(table);
+      resetTable(tableId);
+
+      table.querySelector('thead').innerHTML = `
+        <tr>
+          <th>รายชื่อ</th>
+          ${months.map(month => `<th class="text-center">${escapeHtml(month.label)}</th>`).join('')}
+          <th class="text-center">รวม</th>
+        </tr>
+      `;
+      table.querySelector('tbody').innerHTML = people.map(person => `
+        <tr>
+          <th>${escapeHtml(person.name)}</th>
+          ${months.map(month => renderMonthCell(person, month)).join('')}
+          <td class="text-center fw-bold">${formatNumber(person.total)}</td>
+        </tr>
+      `).join('');
+
+      document.getElementById('monthlySummaryLabel').textContent = selectedLeaveType && selectedLeaveType !== 'All'
+        ? `${fiscalYear} | ประเภทการลา: ${selectedLeaveType}`
+        : `${fiscalYear} | ลา=วัน, สาย/ไม่ได้สแกนบัตร=ครั้ง`;
+      document.getElementById('personMonthlyCount').textContent = `${formatNumber(people.length)} คน`;
+      state.tables[tableId] = new DataTable(`#${tableId}`, {
+        deferRender: true,
+        pageLength: 10,
+        lengthMenu: [10, 15, 20, 25],
+        scrollX: true,
+        dom: '<"row g-2 mb-3"<"col-md-6"B><"col-md-6"f>>rt<"row g-2 mt-3"<"col-md-6"l><"col-md-6"p>>',
+        buttons: ['copy', 'excel', 'csv', 'print'],
+        language: tableLanguage()
+      });
+      state.tables[tableId].on('draw', () => {
+        disposeTooltips(table);
+        enableTooltips(table);
+      });
+      enableTooltips(table);
+    }
+
+    function renderFrequentLateTable(people) {
+      const tableId = 'frequentLateTable';
+      const tableRows = people.map((person, index) => [
+        index + 1,
+        escapeHtml(person.name),
+        escapeHtml(person.department),
+        escapeHtml(person.position),
+        person.lateCount,
+        person.regularShiftCount || 0,
+        person.otShiftCount || 0,
+        formatDate(person.lastDate),
+        `<button class="btn btn-sm btn-primary late-detail-btn" type="button" data-index="${index}">ดูรายการ</button>`
+      ]);
+
+      resetTable(tableId);
+      document.getElementById('latePeopleCount').textContent = `${formatNumber(people.length)} คน`;
+      state.tables[tableId] = new DataTable(`#${tableId}`, {
+        data: tableRows,
+        deferRender: true,
+        pageLength: 10,
+        lengthMenu: [10, 15, 20, 25],
+        dom: '<"row g-2 mb-3"<"col-md-6"B><"col-md-6"f>>rt<"row g-2 mt-3"<"col-md-6"l><"col-md-6"p>>',
+        buttons: ['copy', 'excel', 'csv', 'print'],
+        order: [[4, 'desc']],
+        columnDefs: [
+          { targets: [0, 4, 5, 6], className: 'text-center' },
+          { targets: 8, className: 'text-center', orderable: false }
+        ],
+        language: tableLanguage()
+      });
+    }
+
+    function renderMonthCell(person, month) {
+      const bucket = person.months[month.key];
+      if (!bucket || !bucket.count) return '<td class="text-center text-muted">0</td>';
+      return `
+        <td class="text-center">
+          <button
+            type="button"
+            class="month-btn"
+            data-person="${escapeHtml(person.name)}"
+            data-month="${escapeHtml(month.key)}"
+            data-bs-toggle="tooltip"
+            data-tooltip-html="${escapeAttribute(buildMonthTooltip(person, bucket))}">
+            ${formatNumber(bucket.value)}
+          </button>
+        </td>
+      `;
+    }
+
+    function buildMonthTooltip(person, bucket) {
+      const categoryLines = Object.entries(bucket.byCategory || {})
+        .sort((a, b) => b[1] - a[1])
+        .map(([category, value]) => `${escapeHtml(category)}: ${formatNumber(value)} ${category === 'ลา' ? 'วัน' : 'ครั้ง'}`)
+        .join('<br>');
+      const itemLines = (bucket.items || []).slice(0, 20).map(item => {
+        if (item.category === 'ลา') {
+          return `${escapeHtml(item.name)} | ${formatDateRange(item)} | ${escapeHtml(item.type)}`;
+        }
+        if (item.category === 'สาย') {
+          return `${escapeHtml(item.name)} | ${formatDate(item.startDate)} | ${escapeHtml(item.shiftType || 'ไม่มีข้อมูล')} | ${escapeHtml(item.shift || 'ไม่มีข้อมูล')} | ${escapeHtml(getShiftRound(item))}`;
+        }
+        return `${escapeHtml(item.name)} | ${formatDate(item.startDate)} | ${escapeHtml(item.type || 'ไม่มีข้อมูล')}`;
+      });
+      if ((bucket.items || []).length > 20) {
+        itemLines.push(`...อีก ${formatNumber(bucket.items.length - 20)} รายการ`);
+      }
+
+      return `
+        <div class="text-start">
+          <strong>${escapeHtml(person.name)}</strong><br>
+          <span>${escapeHtml(bucket.labelWithYear)}</span>
+          <hr class="my-1">
+          ${categoryLines || 'ไม่มีข้อมูล'}
+          <hr class="my-1">
+          ${itemLines.join('<br>') || 'ไม่มีรายละเอียด'}
+        </div>
+      `;
+    }
+
+    function openPersonMonthDetail(personName, monthKey) {
+      const selectedLeaveType = document.getElementById('leaveTypeFilter').value;
+      const summary = state.dashboard
+        ? filterPersonMonthlySummary(state.dashboard.personMonthlySummary, selectedLeaveType)
+        : null;
+      if (!summary) return;
+
+      const person = summary.people.find(item => item.name === personName);
+      const bucket = person && person.months[monthKey];
+      if (!bucket) return;
+
+      document.getElementById('detailTitle').textContent = `รายละเอียด: ${person.name}`;
+      document.getElementById('detailSubtitle').textContent = `${bucket.labelWithYear} | รวม ${formatNumber(bucket.value)} | ${formatNumber(bucket.count)} รายการ`;
+      document.getElementById('detailBody').innerHTML = detailTable(bucket.items || []);
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('detailModal')).show();
+    }
+
+    function openLatePersonDetail(index) {
+      const person = state.dashboard && state.dashboard.frequentLatePeople
+        ? state.dashboard.frequentLatePeople[index]
+        : null;
+      if (!person) return;
+
+      document.getElementById('detailTitle').textContent = `รายการมาสาย: ${person.name}`;
+      const unknownText = person.unknownShiftCount ? ` | ไม่ระบุ ${formatNumber(person.unknownShiftCount)} ครั้ง` : '';
+      document.getElementById('detailSubtitle').textContent = `รวม ${formatNumber(person.lateCount)} ครั้ง | เวรจริง ${formatNumber(person.regularShiftCount)} ครั้ง | เวร OT ${formatNumber(person.otShiftCount)} ครั้ง${unknownText} | ล่าสุด ${formatDate(person.lastDate)}`;
+      document.getElementById('detailBody').innerHTML = detailTable(person.items || []);
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('detailModal')).show();
+    }
+
+    function detailTable(rows) {
+      if (!rows.length) return '<div class="text-center text-muted py-4">ไม่มีข้อมูล</div>';
+      return `
+        <div class="table-responsive">
+          <table class="table table-sm table-striped align-middle">
+            <thead>
+              <tr>
+                <th>ชื่อ</th>
+                <th>หน่วยงาน</th>
+                <th>ตำแหน่ง</th>
+                <th>ประเภท</th>
+                <th>รายละเอียด</th>
+                <th>ประเภทเวร</th>
+                <th>เวร</th>
+                <th>รอบเวร</th>
+                <th>วันที่เริ่ม</th>
+                <th>วันที่สิ้นสุด</th>
+                <th class="text-end">วัน/ครั้ง</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map(row => `
+                <tr>
+                  <td>${escapeHtml(row.name)}</td>
+                  <td>${escapeHtml(row.department)}</td>
+                  <td>${escapeHtml(row.position)}</td>
+                  <td>${sourceBadge(row.category)}</td>
+                  <td>${escapeHtml(row.type)}</td>
+                  <td>${escapeHtml(row.shiftType || '-')}</td>
+                  <td>${escapeHtml(row.shift || '-')}</td>
+                  <td>${escapeHtml(getShiftRound(row))}</td>
+                  <td>${formatDate(row.startDate)}</td>
+                  <td>${formatDate(row.endDate)}</td>
+                  <td class="text-end">${formatNumber(getMetricValue(row))}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function resetTable(tableId) {
+      if (!state.tables[tableId]) return;
+      state.tables[tableId].destroy();
+      delete state.tables[tableId];
+    }
+
+    function enableTooltips(scope) {
+      scope.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(element => {
+        const instance = new bootstrap.Tooltip(element, {
+          html: true,
+          sanitize: false,
+          placement: 'top',
+          container: 'body',
+          title: element.getAttribute('data-tooltip-html')
+        });
+        state.tooltips.push(instance);
+      });
+    }
+
+    function disposeTooltips(scope) {
+      const elements = scope
+        ? new Set(Array.from(scope.querySelectorAll('[data-bs-toggle="tooltip"]')))
+        : null;
+
+      state.tooltips = state.tooltips.filter(instance => {
+        if (elements && !elements.has(instance._element)) return true;
+        instance.dispose();
+        return false;
+      });
+    }
+
+    function sourceBadge(category) {
+      const cls = category === 'ลา' ? '' : category === 'ไม่ได้สแกนบัตร' ? 'noscan' : 'late';
+      return `<span class="source-badge ${cls}">${escapeHtml(category)}</span>`;
+    }
+
+    function setLoading(show) {
+      document.getElementById('loading').classList.toggle('show', show);
+    }
+
+    function showError(error) {
+      setLoading(false);
+      document.getElementById('errorMessage').textContent = error && error.message ? error.message : String(error);
+      bootstrap.Toast.getOrCreateInstance(document.getElementById('errorToast'), { delay: 7000 }).show();
+    }
+
+    function tableLanguage() {
+      return {
+        search: 'ค้นหา:',
+        lengthMenu: 'แสดง _MENU_ รายการ',
+        info: 'แสดง _START_ ถึง _END_ จาก _TOTAL_ รายการ',
+        infoEmpty: 'ไม่มีข้อมูล',
+        zeroRecords: 'ไม่พบข้อมูล',
+        paginate: { previous: 'ก่อนหน้า', next: 'ถัดไป' }
+      };
+    }
+
+    function formatNumber(value) {
+      return new Intl.NumberFormat('th-TH', { maximumFractionDigits: 2 }).format(Number(value) || 0);
+    }
+
+    function formatDate(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return new Intl.DateTimeFormat('th-TH', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+    }
+
+    function formatDateRange(row) {
+      if (!row.endDate || row.startDate === row.endDate) return formatDate(row.startDate);
+      return `${formatDate(row.startDate)} - ${formatDate(row.endDate)}`;
+    }
+
+    function getShiftRound(row) {
+      const text = `${row.shiftType || ''} ${row.shift || ''}`.toLowerCase();
+      if (/เช้า|morning/.test(text)) return 'เช้า';
+      if (/บ่าย|afternoon/.test(text)) return 'บ่าย';
+      if (/ดึก|night|ค่ำ/.test(text)) return 'ดึก';
+      return 'ไม่มีข้อมูล';
+    }
+
+    function getMetricValue(row) {
+      return row.category === 'ลา' ? row.days : 1;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttribute(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+  </script>
+</body>
+</html>

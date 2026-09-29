@@ -840,7 +840,9 @@
             generated: null,
             staffRules: {},
             editing: null,
-            staffing: {}
+            staffing: {},
+            generationRun: 0,
+            randomTieBreakers: {}
         };
         const DUTY_STAFFING_STORAGE_KEY = 'dutyRosterStaffingSettings';
         let realtimeTimerId = null;
@@ -1948,18 +1950,29 @@
         }
 
         async function saveStaffToSheet() {
+            const staffPayload = getStaffSavePayload();
             const response = await requestAppsScriptJsonpWithRetry('saveStaff', {
                 actorUserId: currentRole === 'admin' ? currentAdminUserId : '',
                 adminSessionToken: currentRole === 'admin' ? currentAdminSessionToken : '',
-                users: JSON.stringify(getStaffSavePayload())
+                users: JSON.stringify(staffPayload)
             }, {
-                timeoutMs: JSONP_REQUEST_READ_TIMEOUT_MS,
-                retries: 1
+                timeoutMs: JSONP_LIGHT_READ_TIMEOUT_MS,
+                retries: 0
             });
-            if (!response || !response.ok) {
+
+            if (response && response.ok) return response;
+
+            const fallbackSaved = await postAppsScriptNoCors({
+                action: 'SAVE_STAFF',
+                actorUserId: currentRole === 'admin' ? currentAdminUserId : '',
+                adminSessionToken: currentRole === 'admin' ? currentAdminSessionToken : '',
+                detail: { users: staffPayload }
+            });
+            if (!fallbackSaved) {
                 throw new Error(response?.message || 'บันทึกรายชื่อเจ้าหน้าที่ลง Google Sheet ไม่สำเร็จ');
             }
-            return response;
+            showTransientStatus('บันทึกรายชื่อแล้ว กำลังรอ sync จาก Google Sheet', 'bg-amber-500 text-white', 6000);
+            return { ok: true, fallback: true };
         }
 
         function findUserByRequestRecord(record) {
@@ -3253,8 +3266,8 @@
 
                 refreshAdminViews();
                 try {
-                    await saveStaffToSheet();
-                    scheduleRealtimeRefresh(1200);
+                    const saved = await saveStaffToSheet();
+                    scheduleRealtimeRefresh(saved?.fallback ? 5000 : 1200);
                     alert(`เปลี่ยน Level เรียบร้อยแล้ว (${scopeLabel}) มีผลตั้งแต่ ${formatDisplayDate(effectiveDate)} เป็นต้นไป`);
                 } catch (error) {
                     user.level = oldLevel;
@@ -3337,9 +3350,9 @@
             nameInput.value = '';
             refreshAdminViews();
             try {
-                await saveStaffToSheet();
+                const saved = await saveStaffToSheet();
                 showTransientStatus(`เพิ่มรายชื่อ ${nextUser.name} แล้ว`, 'bg-emerald-600 text-white');
-                scheduleRealtimeRefresh(1200);
+                scheduleRealtimeRefresh(saved?.fallback ? 5000 : 1200);
             } catch (error) {
                 users = beforeUsers;
                 refreshAdminViews();
@@ -3358,9 +3371,9 @@
             shiftRequests = shiftRequests.filter((request) => !isSameRequestUser(request, user));
             refreshAdminViews();
             try {
-                await saveStaffToSheet();
+                const saved = await saveStaffToSheet();
                 showTransientStatus(`ลบรายชื่อ ${user.name} แล้ว`, 'bg-emerald-600 text-white');
-                scheduleRealtimeRefresh(1200);
+                scheduleRealtimeRefresh(saved?.fallback ? 5000 : 1200);
             } catch (error) {
                 users = beforeUsers;
                 shiftRequests = beforeRequests;
@@ -4968,6 +4981,7 @@
                 const userStats = stats[getUserIdentityKey(user)] || {};
                 return Math.max(0, (userStats.minWorkTarget || 0) - (userStats.work || 0));
             };
+            const getTieBreaker = (user) => dutyRosterState.randomTieBreakers[getUserIdentityKey(user)] || 0;
             const pickOne = (predicate = () => true) => {
                 const candidate = eligiblePool
                     .filter((user) => !picked.some((item) => getUserIdentityKey(item) === getUserIdentityKey(user)))
@@ -4994,6 +5008,7 @@
                             || getLoadRatio(a, 'work') - getLoadRatio(b, 'work')
                             || (aStats[code] || 0) - (bStats[code] || 0)
                             || getLevelOrder(b.level) - getLevelOrder(a.level)
+                            || getTieBreaker(a) - getTieBreaker(b)
                             || a.name.localeCompare(b.name, 'th');
                     })[0];
                 if (candidate) picked.push(candidate);
@@ -5071,6 +5086,10 @@
                 alert('ยังไม่มีรายชื่อเจ้าหน้าที่สำหรับจัดเวร');
                 return;
             }
+            dutyRosterState.generationRun += 1;
+            dutyRosterState.randomTieBreakers = Object.fromEntries(
+                rosterUsers.map((user) => [getUserIdentityKey(user), Math.random()])
+            );
             const positionType = getDutyRosterPositionType(
                 document.getElementById('duty-roster-position').value,
                 document.getElementById('duty-roster-department').value
@@ -5122,7 +5141,7 @@
                 });
             });
 
-            dutyRosterState.generated = { monthKey, positionType, users: rosterUsers, days, roster, stats, warnings, minWorkTarget, lockedOffCells, requestedCells };
+            dutyRosterState.generated = { monthKey, positionType, users: rosterUsers, days, roster, stats, warnings, minWorkTarget, lockedOffCells, requestedCells, generationRun: dutyRosterState.generationRun };
             rebalanceDutyRosterMinimumWork(dutyRosterState.generated);
             appendDutyRosterBalanceWarnings(dutyRosterState.generated);
             renderDutyRosterOutput();
@@ -5141,7 +5160,7 @@
             container.innerHTML = `
                 <div class="border-b border-gray-100 p-4">
                     <h3 class="font-bold text-gray-800">ตารางเวร ${monthName} ${Number(yearText) + 543}</h3>
-                    <p class="mt-1 text-xs text-gray-500">ตำแหน่ง ${result.positionType} • จัดจากคำขอ Approved และข้าม Pending ตามลำดับความปลอดภัย</p>
+                    <p class="mt-1 text-xs text-gray-500">ตำแหน่ง ${result.positionType} • รอบจัดเวร ${result.generationRun || 1} • กด “จัดเวร” ซ้ำเพื่อจัดใหม่ได้</p>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-[1200px] w-full border-collapse text-center text-xs">
