@@ -5007,8 +5007,8 @@
                             || sameLevelWorkBalance
                             || getLoadRatio(a, 'work') - getLoadRatio(b, 'work')
                             || (aStats[code] || 0) - (bStats[code] || 0)
-                            || getLevelOrder(b.level) - getLevelOrder(a.level)
                             || getTieBreaker(a) - getTieBreaker(b)
+                            || getLevelOrder(b.level) - getLevelOrder(a.level)
                             || a.name.localeCompare(b.name, 'th');
                     })[0];
                 if (candidate) picked.push(candidate);
