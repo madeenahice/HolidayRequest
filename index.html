@@ -4897,8 +4897,8 @@
             }
             return {
                 er: [
-                    applyDutyMainLevelOverride(positionType, 'erMorning', { code: 'ช', count: staffing('erMorning'), levelMin: dayInfo.isHoliday ? { 5: 3, 4: 2 } : { 5: 2, 4: 2 } }),
-                    applyDutyMainLevelOverride(positionType, 'erAfternoon', { code: 'บ', count: staffing('erAfternoon'), levelMin: dayInfo.isHoliday ? { 5: 3, 4: 2, 3: 1 } : { 5: 2, 4: 2, 3: 1 } }),
+                    applyDutyMainLevelOverride(positionType, 'erMorning', { code: 'ช', count: staffing('erMorning'), levelMin: dayInfo.isHoliday ? { 5: 3, 4: 1, 3: 1 } : { 5: 2, 4: 1, 3: 1 }, levelMax: dayInfo.isHoliday ? { 5: 3, 4: 2 } : { 5: 3, 4: 2 }, levelGroupMin: { levels: [3, 4, 5], min: 5 } }),
+                    applyDutyMainLevelOverride(positionType, 'erAfternoon', { code: 'บ', count: staffing('erAfternoon'), levelMin: dayInfo.isHoliday ? { 5: 3, 4: 1, 3: 1 } : { 5: 2, 4: 1, 3: 1 }, levelMax: dayInfo.isHoliday ? { 5: 3, 4: 2 } : { 5: 3, 4: 2 }, levelGroupMin: { levels: [3, 4, 5], min: 5 } }),
                     applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), levelMin: { 5: 2, 4: 1, 3: 1 } })
                 ],
                 procedure: [applyDutyMainLevelOverride(positionType, dayInfo.isHoliday ? 'procedureHoliday' : 'procedureWeekday', { code: 'ชG', count: dayInfo.isHoliday ? staffing('procedureHoliday') : staffing('procedureWeekday'), levelMin: { min3: 1 } })],
@@ -4968,10 +4968,16 @@
             return true;
         }
 
-        function pickDutyCandidates(roster, stats, pool, dayIndex, code, count, levelMin = {}, requiredMinLevel = 0, levelGroup = null) {
+        function pickDutyCandidates(roster, stats, pool, dayIndex, code, count, levelMin = {}, requiredMinLevel = 0, levelGroup = null, levelMax = {}) {
             const picked = [];
             const eligiblePool = pool.filter((user) => getLevelOrder(user.level) >= requiredMinLevel);
             const isInLevelGroup = (user) => levelGroup && (levelGroup.levels || []).includes(getLevelOrder(user.level));
+            const getPickedLevelCount = (levelText) => picked.filter((user) => getLevelOrder(user.level) === Number(levelText)).length;
+            const isWithinLevelMax = (user) => {
+                const level = getLevelOrder(user.level);
+                const max = Number(levelMax[String(level)] || 0);
+                return !max || getPickedLevelCount(String(level)) < max;
+            };
             const getLoadRatio = (user, field) => {
                 const userStats = stats[getUserIdentityKey(user)] || {};
                 const availableDays = Math.max(1, userStats.available || 1);
@@ -5035,13 +5041,14 @@
                 const groupCount = levelGroup ? picked.filter(isInLevelGroup).length : 0;
                 const maxGroup = levelGroup ? Number(levelGroup.max || count) : count;
                 const preferOutsideGroup = levelGroup && groupCount >= maxGroup;
-                if (!pickOne(preferOutsideGroup ? (user) => !isInLevelGroup(user) : () => true)) break;
+                const preferredPredicate = preferOutsideGroup ? (user) => !isInLevelGroup(user) && isWithinLevelMax(user) : isWithinLevelMax;
+                if (!pickOne(preferredPredicate) && !pickOne(preferOutsideGroup ? (user) => !isInLevelGroup(user) : () => true)) break;
             }
             return picked;
         }
 
         function assignDutyBlock(roster, stats, warnings, pool, dayInfo, dayIndex, requirement) {
-            const picked = pickDutyCandidates(roster, stats, pool, dayIndex, requirement.code, requirement.count, requirement.levelMin || {}, requirement.requiredMinLevel || 0, requirement.levelGroup || null);
+            const picked = pickDutyCandidates(roster, stats, pool, dayIndex, requirement.code, requirement.count, requirement.levelMin || {}, requirement.requiredMinLevel || 0, requirement.levelGroup || null, requirement.levelMax || {});
             picked.forEach((user) => {
                 const key = getUserIdentityKey(user);
                 roster[key][dayIndex] = roster[key][dayIndex]
@@ -5060,6 +5067,22 @@
                 const max = Number(requirement.levelGroup.max || requirement.count);
                 if (groupCount < min || groupCount > max) {
                     warnings.push(`${formatDisplayDate(dayInfo.date)} เวร ${requirement.code} Level ${levels.join('/')} รวม ${groupCount} คน ควรอยู่ในช่วง ${min}-${max} คน`);
+                }
+            }
+            if (requirement.levelMax) {
+                Object.entries(requirement.levelMax).forEach(([levelText, maxCount]) => {
+                    const actualCount = picked.filter((user) => getLevelOrder(user.level) === Number(levelText)).length;
+                    if (actualCount > Number(maxCount || 0)) {
+                        warnings.push(`${formatDisplayDate(dayInfo.date)} เวร ${requirement.code} Level ${levelText} มี ${actualCount} คน เกินที่กำหนด ${maxCount} คน`);
+                    }
+                });
+            }
+            if (requirement.levelGroupMin) {
+                const levels = requirement.levelGroupMin.levels || [];
+                const groupCount = picked.filter((user) => levels.includes(getLevelOrder(user.level))).length;
+                const min = Number(requirement.levelGroupMin.min || 0);
+                if (groupCount < min) {
+                    warnings.push(`${formatDisplayDate(dayInfo.date)} เวร ${requirement.code} Level ${levels.join('/')} รวม ${groupCount} คน ต้องมีอย่างน้อย ${min} คน`);
                 }
             }
         }
@@ -5287,12 +5310,26 @@
                 if (!ok) return false;
             }
 
+            if (requirement.levelMax) {
+                const ok = Object.entries(requirement.levelMax).every(([levelText, maxCount]) => {
+                    const matchedCount = assignedUsers.filter((user) => getLevelOrder(user.level) === Number(levelText)).length;
+                    return matchedCount <= Number(maxCount || 0);
+                });
+                if (!ok) return false;
+            }
+
             if (requirement.levelGroup) {
                 const levels = requirement.levelGroup.levels || [];
                 const groupCount = assignedUsers.filter((user) => levels.includes(getLevelOrder(user.level))).length;
                 const min = Number(requirement.levelGroup.min || 0);
                 const max = Number(requirement.levelGroup.max || requirement.count);
                 if (groupCount < min || groupCount > max) return false;
+            }
+
+            if (requirement.levelGroupMin) {
+                const levels = requirement.levelGroupMin.levels || [];
+                const groupCount = assignedUsers.filter((user) => levels.includes(getLevelOrder(user.level))).length;
+                if (groupCount < Number(requirement.levelGroupMin.min || 0)) return false;
             }
 
             return true;
