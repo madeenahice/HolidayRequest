@@ -582,7 +582,7 @@
                             <select id="admin-add-user-position" class="p-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500"></select>
                             <select id="admin-add-user-level" class="p-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500"></select>
                         </div>
-                        <button onclick="addAdminUser()" class="mt-2 bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">เพิ่มรายชื่อ</button>
+                        <button onclick="addAdminUser().catch(handleAsyncActionError)" class="mt-2 bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">เพิ่มรายชื่อ</button>
                     </div>
 
                     <div id="admin-add-department-panel" class="hidden">
@@ -610,7 +610,7 @@
                     </div>
                 </div>
 
-                <div>
+                <div id="admin-selected-list-section">
                     <h3 id="admin-selected-list-title" class="font-bold text-amber-800 mb-2">รายการเดิม</h3>
                     <div id="admin-selected-list" class="space-y-1 max-h-64 overflow-y-auto"></div>
                 </div>
@@ -936,8 +936,18 @@
             renderLeaveTypeDropdown();
             setupEventListeners();
             renderLevelLegend();
-            renderCalendar();
-            await loadInitialData();
+            loadDutyStaffingSettings();
+            refreshViewsAfterDataLoad();
+            startRealtimeSync();
+            loadInitialData().then(() => {
+                refreshViewsAfterDataLoad();
+            }).catch((error) => {
+                console.warn('Initial data load failed', error);
+                showTransientStatus('กำลังรอ sync ข้อมูลจาก Google Sheet', 'bg-amber-500 text-white', 8000);
+            });
+        });
+
+        function refreshViewsAfterDataLoad() {
             renderPositionDropdowns();
             renderUserDropdowns();
             renderRequestSummaryFilters();
@@ -945,11 +955,9 @@
             renderAdminTable();
             renderAdminSettings();
             renderAdminReserveQueue();
-            loadDutyStaffingSettings();
             renderDutyRosterControls();
             renderCalendar();
-            startRealtimeSync();
-        });
+        }
 
         function formatDateInput(date) {
             const year = date.getFullYear();
@@ -1929,30 +1937,29 @@
             return true;
         }
 
-        function saveStaffToSheet() {
-            const payload = {
-                action: 'SAVE_STAFF',
+        function getStaffSavePayload() {
+            return users.map((user) => ({
+                id: user.id,
+                name: user.name,
+                department: user.department,
+                position: user.position,
+                level: user.level
+            }));
+        }
+
+        async function saveStaffToSheet() {
+            const response = await requestAppsScriptJsonpWithRetry('saveStaff', {
                 actorUserId: currentRole === 'admin' ? currentAdminUserId : '',
                 adminSessionToken: currentRole === 'admin' ? currentAdminSessionToken : '',
-                detail: {
-                    users: users.map((user) => ({
-                        id: user.id,
-                        name: user.name,
-                        department: user.department,
-                        position: user.position,
-                        level: user.level
-                    }))
-                }
-            };
-
-            fetch(GOOGLE_SHEET_LOG_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify(payload)
-            }).catch((error) => {
-                console.warn('Cannot save staff to Google Sheet', error);
+                users: JSON.stringify(getStaffSavePayload())
+            }, {
+                timeoutMs: JSONP_REQUEST_READ_TIMEOUT_MS,
+                retries: 1
             });
+            if (!response || !response.ok) {
+                throw new Error(response?.message || 'บันทึกรายชื่อเจ้าหน้าที่ลง Google Sheet ไม่สำเร็จ');
+            }
+            return response;
         }
 
         function findUserByRequestRecord(record) {
@@ -3245,9 +3252,17 @@
                 }
 
                 refreshAdminViews();
-                saveStaffToSheet();
-                scheduleRealtimeRefresh(1200);
-                alert(`เปลี่ยน Level เรียบร้อยแล้ว (${scopeLabel}) มีผลตั้งแต่ ${formatDisplayDate(effectiveDate)} เป็นต้นไป`);
+                try {
+                    await saveStaffToSheet();
+                    scheduleRealtimeRefresh(1200);
+                    alert(`เปลี่ยน Level เรียบร้อยแล้ว (${scopeLabel}) มีผลตั้งแต่ ${formatDisplayDate(effectiveDate)} เป็นต้นไป`);
+                } catch (error) {
+                    user.level = oldLevel;
+                    shiftRequests = beforeRequests;
+                    refreshAdminViews();
+                    alert(error?.message || 'บันทึก Level เจ้าหน้าที่ลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
+                    throw error;
+                }
             }
         }
 
@@ -3299,7 +3314,7 @@
             renderDutyRosterControls();
         }
 
-        window.addAdminUser = function() {
+        window.addAdminUser = async function() {
             const nameInput = document.getElementById('admin-add-user-name');
             const name = nameInput.value.trim();
             const department = document.getElementById('admin-add-user-department').value;
@@ -3310,26 +3325,49 @@
                 return;
             }
 
-            users.push({
+            const beforeUsers = users.slice();
+            const nextUser = {
                 id: String(Math.max(0, ...users.map((user) => Number(user.id) || 0)) + 1),
                 name,
                 department,
                 position,
                 level
-            });
+            };
+            users.push(nextUser);
             nameInput.value = '';
             refreshAdminViews();
-            saveStaffToSheet();
+            try {
+                await saveStaffToSheet();
+                showTransientStatus(`เพิ่มรายชื่อ ${nextUser.name} แล้ว`, 'bg-emerald-600 text-white');
+                scheduleRealtimeRefresh(1200);
+            } catch (error) {
+                users = beforeUsers;
+                refreshAdminViews();
+                alert(error?.message || 'เพิ่มเจ้าหน้าที่ไม่สำเร็จ กรุณาลองใหม่');
+                throw error;
+            }
         };
 
-        window.deleteUser = function(userId, userName = '') {
+        window.deleteUser = async function(userId, userName = '') {
             const user = findUserById(userId, userName);
             if (!user) return;
             if (!confirm(`ยืนยันลบรายชื่อ ${user.name} หรือไม่?`)) return;
+            const beforeUsers = users.slice();
+            const beforeRequests = cloneShiftRequestsSnapshot();
             users = users.filter((item) => item !== user);
             shiftRequests = shiftRequests.filter((request) => !isSameRequestUser(request, user));
             refreshAdminViews();
-            saveStaffToSheet();
+            try {
+                await saveStaffToSheet();
+                showTransientStatus(`ลบรายชื่อ ${user.name} แล้ว`, 'bg-emerald-600 text-white');
+                scheduleRealtimeRefresh(1200);
+            } catch (error) {
+                users = beforeUsers;
+                shiftRequests = beforeRequests;
+                refreshAdminViews();
+                alert(error?.message || 'ลบเจ้าหน้าที่ไม่สำเร็จ กรุณาลองใหม่');
+                throw error;
+            }
         };
 
         function escapeInlineValue(value) {
@@ -3983,7 +4021,7 @@
                         </div>
                     </td>
                     <td class="p-3">
-                        <button onclick="deleteUser(${userIdArg}, ${userNameArg})" class="text-red-500 hover:text-red-700 text-xs font-semibold">ลบ</button>
+                        <button onclick="deleteUser(${userIdArg}, ${userNameArg}).catch(handleAsyncActionError)" class="text-red-500 hover:text-red-700 text-xs font-semibold">ลบ</button>
                     </td>
                 </tr>
                     `;
@@ -4183,40 +4221,19 @@
 
         function renderAdminSelectedList() {
             const typeSelect = document.getElementById('admin-add-type');
+            const section = document.getElementById('admin-selected-list-section');
             const title = document.getElementById('admin-selected-list-title');
             const container = document.getElementById('admin-selected-list');
-            if (!typeSelect || !title || !container) return;
+            if (!typeSelect || !section || !title || !container) return;
 
             const selectedType = typeSelect.value;
             if (selectedType === 'user') {
-                title.innerText = 'รายการเจ้าหน้าที่เดิม';
-                container.innerHTML = users.map((user) => `
-                    ${(() => {
-                        const userIdArg = JSON.stringify(user.id);
-                        const userNameArg = JSON.stringify(user.name);
-                        return `
-                    <div class="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1fr_1.2fr_auto] gap-2 rounded-lg bg-white p-2 text-xs">
-                        <input value="${user.name}" onchange="changeUserName(${userIdArg}, ${userNameArg}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
-                        <select onchange="changeUserDepartment(${userIdArg}, ${userNameArg}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
-                            ${departments.map((department) => `<option value="${department}" ${user.department === department ? 'selected' : ''}>${department}</option>`).join('')}
-                        </select>
-                        <select onchange="changeUserPosition(${userIdArg}, ${userNameArg}, this.value)" class="p-1.5 border border-amber-100 rounded-md">
-                            ${positions.map((position) => `<option value="${position}" ${user.position === position ? 'selected' : ''}>${position}</option>`).join('')}
-                        </select>
-                        <div class="flex flex-wrap items-center gap-1">
-                            <select class="min-w-0 flex-1 p-1.5 border border-amber-100 rounded-md">
-                                ${levels.map((level) => `<option value="${level}" ${user.level === level ? 'selected' : ''}>${level}</option>`).join('')}
-                            </select>
-                            <button onclick="changeUserLevel(${userIdArg}, ${userNameArg}, this.parentElement.querySelector('select').value).catch(handleAsyncActionError)" class="rounded-md bg-amber-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-amber-700">บันทึก</button>
-                        </div>
-                        <button onclick="deleteUser(${userIdArg}, ${userNameArg})" class="text-red-500 hover:text-red-700 font-semibold">ลบ</button>
-                    </div>
-                        `;
-                    })()}
-                `).join('');
+                section.classList.add('hidden');
+                container.innerHTML = '';
                 return;
             }
 
+            section.classList.remove('hidden');
             if (selectedType === 'department') {
                 title.innerText = 'รายการหน่วยงานเดิม';
                 container.innerHTML = departments.map((department) => `

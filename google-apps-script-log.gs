@@ -130,6 +130,10 @@ function doGet(e) {
     return createJsonpResponse_(params.callback, getStaffData_());
   }
 
+  if (params.action === 'bootstrap') {
+    return createJsonpResponse_(params.callback, getBootstrapData_());
+  }
+
   if (params.action === 'getRequests') {
     return createJsonpResponse_(params.callback, getRequestData_());
   }
@@ -146,6 +150,23 @@ function doGet(e) {
     try {
       const rules = JSON.parse(params.rules || '{}');
       return createJsonpResponse_(params.callback, saveRequestRules_(rules));
+    } catch (error) {
+      return createJsonpResponse_(params.callback, {
+        ok: false,
+        message: error && error.message ? error.message : String(error)
+      });
+    }
+  }
+
+  if (params.action === 'saveStaff') {
+    try {
+      const users = JSON.parse(params.users || '[]');
+      saveStaff_(users);
+      appendAdminAuditLog_('SAVE_STAFF', { userCount: (users || []).length }, {
+        actorUserId: params.actorUserId,
+        adminSessionToken: params.adminSessionToken
+      });
+      return createJsonpResponse_(params.callback, { ok: true, userCount: (users || []).length });
     } catch (error) {
       return createJsonpResponse_(params.callback, {
         ok: false,
@@ -366,6 +387,17 @@ function getStaffData_() {
     departments: uniqueValues_(users.map((user) => user.department)),
     positions: uniqueValues_(users.map((user) => user.position)),
     levels: uniqueValues_(users.map((user) => user.level))
+  };
+}
+
+function getBootstrapData_() {
+  return {
+    ok: true,
+    version: SCRIPT_VERSION,
+    staff: getStaffData_(),
+    requests: getRequestData_(),
+    holidays: getPublicHolidayData_(),
+    requestRules: getRequestRulesData_()
   };
 }
 
@@ -993,7 +1025,7 @@ function getAdminAccountRows_() {
 }
 
 function getApprovedAdminAccountCount_() {
-  return getAdminAccountRows_().filter((account) => account.status === 'Approved').length;
+  return getAdminAccountRows_().filter((account) => isAdminAccountApproved_(account.status)).length;
 }
 
 function registerAdminAccount_(userId, password) {
@@ -1013,7 +1045,7 @@ function registerAdminAccount_(userId, password) {
   if (existing) {
     return {
       ok: false,
-      message: existing.status === 'Approved'
+      message: isAdminAccountApproved_(existing.status)
         ? 'UserID นี้ได้รับอนุมัติแล้ว กรุณาเข้าสู่ระบบ'
         : 'UserID นี้ลงทะเบียนแล้วและรออนุมัติหลังบ้าน'
     };
@@ -1045,10 +1077,14 @@ function verifyAdminAccount_(userId, password) {
   }
   const normalizedUserId = normalizeAdminUserId_(userId);
   const account = getAdminAccountRows_().find((item) => item.userId === normalizedUserId);
-  if (account && account.status !== 'Approved') {
+  if (account && !isAdminAccountApproved_(account.status)) {
     return { ok: false, message: 'บัญชี Admin นี้ยังไม่ได้รับอนุมัติหลังบ้าน' };
   }
   return { ok: false, message: 'UserID หรือ Password Admin ไม่ถูกต้อง' };
+}
+
+function isAdminAccountApproved_(status) {
+  return ['approved', 'approve'].includes(String(status || '').trim().toLowerCase());
 }
 
 function isAdminLoginValid_(userId, password) {
@@ -1056,7 +1092,7 @@ function isAdminLoginValid_(userId, password) {
   const rawPassword = String(password || '');
   if (!normalizedUserId || !rawPassword) return false;
   const account = getAdminAccountRows_().find((item) => item.userId === normalizedUserId);
-  if (!account || account.status !== 'Approved' || !account.passwordHash || !account.salt) return false;
+  if (!account || !isAdminAccountApproved_(account.status) || !account.passwordHash || !account.salt) return false;
   return hashAdminPassword_(rawPassword, account.salt) === account.passwordHash;
 }
 
