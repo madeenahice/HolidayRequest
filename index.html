@@ -4332,8 +4332,7 @@
                 procedureWeekday: 3,
                 procedureHoliday: 2,
                 screeningEarly: 1,
-                screeningWeekday: 1,
-                screeningPublicHoliday: 1
+                screeningWeekday: 1
             };
         }
 
@@ -4486,12 +4485,12 @@
                 ['screeningWeekday', 'คัดกรอง วันธรรมดา']
             ];
             if (positionType === 'PN') {
-                return [...common, ['screeningPublicHoliday', 'คัดกรอง นักขัตฤกษ์ (6S)']];
+                return [...common, ['screeningPublicHoliday', 'คัดกรอง นักขัตฤกษ์']];
             }
             return [
                 ...common,
-                ['screeningEarly', 'คัดกรอง 6S ทุกวัน'],
-                ['screeningPublicHoliday', 'คัดกรอง นักขัตฤกษ์ (6S)']
+                ['screeningEarly', 'คัดกรอง 6S วันธรรมดา'],
+                ['screeningWeekday', 'คัดกรอง ชS ทุกวัน']
             ];
         }
 
@@ -4889,7 +4888,7 @@
                     ],
                     procedure: [applyDutyMainLevelOverride(positionType, dayInfo.isHoliday ? 'procedureHoliday' : 'procedureWeekday', { code: 'ชG', count: dayInfo.isHoliday ? staffing('procedureHoliday') : staffing('procedureWeekday'), levelMin: { min3: 1 } })],
                     screening: dayInfo.isPublicHoliday
-                        ? [applyDutyMainLevelOverride(positionType, 'screeningPublicHoliday', { code: '6S', count: staffing('screeningPublicHoliday'), levelGroup: { levels: [2], min: 1, max: 1 } })]
+                        ? [applyDutyMainLevelOverride(positionType, 'screeningPublicHoliday', { code: 'ชS', count: staffing('screeningPublicHoliday'), levelGroup: { levels: [2], min: 1, max: 1 } })]
                         : dayInfo.isWeekend
                             ? []
                             : [applyDutyMainLevelOverride(positionType, 'screeningWeekday', { code: 'ชS', count: staffing('screeningWeekday') })]
@@ -4902,12 +4901,10 @@
                     applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), levelMin: { 5: 2, 4: 1, 3: 1 } })
                 ],
                 procedure: [applyDutyMainLevelOverride(positionType, dayInfo.isHoliday ? 'procedureHoliday' : 'procedureWeekday', { code: 'ชG', count: dayInfo.isHoliday ? staffing('procedureHoliday') : staffing('procedureWeekday'), levelMin: { min3: 1 } })],
-                screening: dayInfo.isHoliday
-                    ? [applyDutyMainLevelOverride(positionType, 'screeningPublicHoliday', { code: '6S', count: staffing('screeningPublicHoliday'), requiredMinLevel: 3 })]
-                    : [
-                        applyDutyMainLevelOverride(positionType, 'screeningEarly', { code: '6S', count: staffing('screeningEarly'), requiredMinLevel: 3 }),
-                        applyDutyMainLevelOverride(positionType, 'screeningWeekday', { code: 'ชS', count: staffing('screeningWeekday'), requiredMinLevel: 3 })
-                    ]
+                screening: [
+                    ...(!dayInfo.isHoliday ? [applyDutyMainLevelOverride(positionType, 'screeningEarly', { code: '6S', count: staffing('screeningEarly'), requiredMinLevel: 3 })] : []),
+                    applyDutyMainLevelOverride(positionType, 'screeningWeekday', { code: 'ชS', count: staffing('screeningWeekday'), requiredMinLevel: 3 })
+                ]
             };
         }
 
