@@ -459,8 +459,13 @@
 
                 <div class="rounded-xl border border-indigo-100 bg-white p-4">
                     <div class="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                        <h3 class="font-bold text-indigo-800">เงื่อนไขรายบุคคล</h3>
-                        <p class="text-xs text-gray-500">เลือกผู้ประจำหัตถการ/คัดกรอง หรือกันบางคนไม่ให้ระบบจัดเวร</p>
+                        <div>
+                            <h3 class="font-bold text-indigo-800">เงื่อนไขรายบุคคล</h3>
+                            <p class="text-xs text-gray-500">เลือกผู้ประจำหัตถการ/คัดกรอง หรือกันบางคนไม่ให้ระบบจัดเวร</p>
+                        </div>
+                        <button id="btn-toggle-duty-staff-rules" type="button" class="rounded-lg bg-indigo-100 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-200">
+                            <i class="fa-solid fa-eye-slash mr-1"></i> ซ่อน
+                        </button>
                     </div>
                     <div id="duty-roster-staff-rules" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2"></div>
                 </div>
@@ -841,8 +846,11 @@
             staffRules: {},
             editing: null,
             staffing: {},
+            staffRulesHidden: false,
             generationRun: 0,
-            randomTieBreakers: {}
+            randomTieBreakers: {},
+            generationSeed: 0,
+            lastRosterSignature: ''
         };
         const DUTY_STAFFING_STORAGE_KEY = 'dutyRosterStaffingSettings';
         let realtimeTimerId = null;
@@ -1440,6 +1448,9 @@
             });
             document.getElementById('btn-toggle-duty-staffing').addEventListener('click', () => {
                 toggleDutyStaffingPanel();
+            });
+            document.getElementById('btn-toggle-duty-staff-rules').addEventListener('click', () => {
+                toggleDutyStaffRulesPanel();
             });
             document.getElementById('btn-duty-roster-edit-close').addEventListener('click', () => {
                 closeDutyRosterEditModal();
@@ -2505,6 +2516,11 @@
             return formatDateInput(new Date(date.getFullYear(), date.getMonth(), 1));
         }
 
+        function getFirstAllowedMonthStartDate() {
+            const firstAllowedDate = getFirstAllowedUserDate();
+            return formatDateInput(new Date(firstAllowedDate.getFullYear(), firstAllowedDate.getMonth(), 1));
+        }
+
         function getCreateActionForRequest(request) {
             return request.status === 'Approved' ? 'CREATE_APPROVED_REQUEST' : 'CREATE_PENDING_REQUEST';
         }
@@ -3252,14 +3268,14 @@
                 for (const item of writes) {
                     const saved = await logAction(item.action, item.detail, {
                         refresh: false,
-                        successText: 'บันทึกการเปลี่ยน Level สำเร็จ',
-                        failureText: 'บันทึกการเปลี่ยน Level ไม่สำเร็จ'
+                        successText: 'ปรับเลเวลสำเร็จ',
+                        failureText: 'ปรับเลเวลไม่สำเร็จ'
                     });
                     if (!saved) {
                         user.level = oldLevel;
                         shiftRequests = beforeRequests;
                         refreshAdminViews();
-                        alert('บันทึกการเปลี่ยน Level ลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
+                        alert('ปรับเลเวลลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
                         return;
                     }
                 }
@@ -3268,19 +3284,19 @@
                 try {
                     const saved = await saveStaffToSheet();
                     scheduleRealtimeRefresh(saved?.fallback ? 5000 : 1200);
-                    alert(`เปลี่ยน Level เรียบร้อยแล้ว (${scopeLabel}) มีผลตั้งแต่ ${formatDisplayDate(effectiveDate)} เป็นต้นไป`);
+                    alert('ปรับเลเวลสำเร็จ');
                 } catch (error) {
                     user.level = oldLevel;
                     shiftRequests = beforeRequests;
                     refreshAdminViews();
-                    alert(error?.message || 'บันทึก Level เจ้าหน้าที่ลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
+                    alert(error?.message || 'ปรับเลเวลเจ้าหน้าที่ลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
                     throw error;
                 }
             }
         }
 
         window.changeUserLevel = async function(userId, userName, newLevel) {
-            await changeUserLevelEffective(userId, userName, newLevel, getNextMonthStartDate(), 'เดือนถัดไป');
+            await changeUserLevelEffective(userId, userName, newLevel, getFirstAllowedMonthStartDate(), 'เดือนที่ยังมีสิทธิ์ขอเวร');
         };
 
         window.changeUserLevelCurrentMonth = async function(userId, userName, newLevel) {
@@ -3367,13 +3383,25 @@
             if (!confirm(`ยืนยันลบรายชื่อ ${user.name} หรือไม่?`)) return;
             const beforeUsers = users.slice();
             const beforeRequests = cloneShiftRequestsSnapshot();
+            const deletedRequests = shiftRequests.filter((request) => isSameRequestUser(request, user));
             users = users.filter((item) => item !== user);
-            shiftRequests = shiftRequests.filter((request) => !isSameRequestUser(request, user));
+            shiftRequests = shiftRequests.filter((request) => !deletedRequests.includes(request));
             refreshAdminViews();
             try {
+                for (const request of deletedRequests) {
+                    const requestDeleted = await logAction('DELETE_REQUEST', { ...getRequestLogDetail(request), status: 'cancle' }, {
+                        refresh: false,
+                        successText: 'ลบคำขอเวรของเจ้าหน้าที่สำเร็จ',
+                        failureText: 'ลบคำขอเวรของเจ้าหน้าที่ไม่สำเร็จ'
+                    });
+                    if (!requestDeleted) {
+                        throw new Error('ลบคำขอเวรของเจ้าหน้าที่ลง Google Sheet ไม่สำเร็จ');
+                    }
+                }
                 const saved = await saveStaffToSheet();
-                showTransientStatus(`ลบรายชื่อ ${user.name} แล้ว`, 'bg-emerald-600 text-white');
+                showTransientStatus('ลบสำเร็จ', 'bg-emerald-600 text-white');
                 scheduleRealtimeRefresh(saved?.fallback ? 5000 : 1200);
+                alert('ลบสำเร็จ');
             } catch (error) {
                 users = beforeUsers;
                 shiftRequests = beforeRequests;
@@ -4562,6 +4590,18 @@
                 : '<i class="fa-solid fa-sliders mr-1"></i> ตั้งค่า';
         }
 
+        function toggleDutyStaffRulesPanel(forceHidden = null) {
+            const panel = document.getElementById('duty-roster-staff-rules');
+            const button = document.getElementById('btn-toggle-duty-staff-rules');
+            if (!panel || !button) return;
+            const shouldHide = forceHidden === null ? !dutyRosterState.staffRulesHidden : Boolean(forceHidden);
+            dutyRosterState.staffRulesHidden = shouldHide;
+            panel.classList.toggle('hidden', shouldHide);
+            button.innerHTML = shouldHide
+                ? '<i class="fa-solid fa-eye mr-1"></i> แสดง'
+                : '<i class="fa-solid fa-eye-slash mr-1"></i> ซ่อน';
+        }
+
         function setDutyStaffingDepartment(value) {
             const rosterDepartment = document.getElementById('duty-roster-department');
             if (!rosterDepartment) return;
@@ -4691,6 +4731,7 @@
             if (!monthInput.value) monthInput.value = getDutyRosterMonthKey();
             renderDutyStaffingSettings();
             renderDutyRosterStaffRules();
+            toggleDutyStaffRulesPanel(dutyRosterState.staffRulesHidden);
             renderDutyRosterOutput();
         }
 
@@ -4752,12 +4793,9 @@
         };
 
         function resetDutyRoster() {
-            getDutyRosterSelectedUsers().forEach((user) => {
-                delete dutyRosterState.staffRules[getUserIdentityKey(user)];
-            });
             dutyRosterState.generated = null;
             renderDutyRosterStaffRules();
-            renderDutyRosterOutput();
+            generateDutyRoster({ forceNewRun: true });
         }
 
         function getDutyRosterDays(monthKey) {
@@ -4965,9 +5003,27 @@
             return true;
         }
 
+        function getDutyRosterRunJitter(user, dayIndex, code) {
+            const text = `${dutyRosterState.generationSeed}|${getUserIdentityKey(user)}|${dayIndex}|${code}`;
+            let hash = 0;
+            for (let index = 0; index < text.length; index += 1) {
+                hash = ((hash << 5) - hash) + text.charCodeAt(index);
+                hash |= 0;
+            }
+            return Math.abs(hash % 10000) / 10000;
+        }
+
         function pickDutyCandidates(roster, stats, pool, dayIndex, code, count, levelMin = {}, requiredMinLevel = 0, levelGroup = null, levelMax = {}) {
             const picked = [];
-            const eligiblePool = pool.filter((user) => getLevelOrder(user.level) >= requiredMinLevel);
+            const poolPriority = new Map();
+            const eligiblePool = [];
+            pool.forEach((user, index) => {
+                const key = getUserIdentityKey(user);
+                if (!poolPriority.has(key)) poolPriority.set(key, Number(user.__dutyPoolPriority || 0));
+                if (!eligiblePool.some((item) => getUserIdentityKey(item) === key) && getLevelOrder(user.level) >= requiredMinLevel) {
+                    eligiblePool.push(user);
+                }
+            });
             const isInLevelGroup = (user) => levelGroup && (levelGroup.levels || []).includes(getLevelOrder(user.level));
             const getPickedLevelCount = (levelText) => picked.filter((user) => getLevelOrder(user.level) === Number(levelText)).length;
             const isWithinLevelMax = (user) => {
@@ -5005,13 +5061,15 @@
                             ? getLoadRatio(a, 'work') - getLoadRatio(b, 'work')
                             : 0;
                         return minimumWorkBalance
+                            || (poolPriority.get(getUserIdentityKey(a)) || 0) - (poolPriority.get(getUserIdentityKey(b)) || 0)
                             || sameLevelHeavyShiftBalance
                             || heavyShiftBalance
                             || sameLevelWorkBalance
                             || getLoadRatio(a, 'work') - getLoadRatio(b, 'work')
                             || (aStats[code] || 0) - (bStats[code] || 0)
-                            || getTieBreaker(a) - getTieBreaker(b)
                             || getLevelOrder(b.level) - getLevelOrder(a.level)
+                            || getDutyRosterRunJitter(a, dayIndex, code) - getDutyRosterRunJitter(b, dayIndex, code)
+                            || getTieBreaker(a) - getTieBreaker(b)
                             || a.name.localeCompare(b.name, 'th');
                     })[0];
                 if (candidate) picked.push(candidate);
@@ -5033,6 +5091,16 @@
                 while (picked.filter(isInLevelGroup).length < Number(levelGroup.min || 0) && picked.length < count) {
                     if (!pickOne(isInLevelGroup)) break;
                 }
+            }
+            const seniorCorePredicate = (user) => {
+                const groupCount = levelGroup ? picked.filter(isInLevelGroup).length : 0;
+                const maxGroup = levelGroup ? Number(levelGroup.max || count) : count;
+                return getLevelOrder(user.level) >= 3
+                    && isWithinLevelMax(user)
+                    && (!levelGroup || groupCount < maxGroup || !isInLevelGroup(user));
+            };
+            while (picked.length < count && pickOne(seniorCorePredicate)) {
+                // Fill the core of the shift with Level 5/4/3 before using junior levels.
             }
             while (picked.length < count) {
                 const groupCount = levelGroup ? picked.filter(isInLevelGroup).length : 0;
@@ -5089,17 +5157,40 @@
             return order[code] || 99;
         }
 
+        function mergeDutyPools(...pools) {
+            const seen = new Set();
+            return pools.flatMap((pool, poolIndex) => pool.map((user) => ({ ...user, __dutyPoolPriority: poolIndex })))
+                .filter((user) => {
+                    const key = getUserIdentityKey(user);
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                });
+        }
+
         function getOrderedDutyRequirementBlocks(requirements, byAssignment) {
+            const erPool = mergeDutyPools(byAssignment.er, byAssignment.screening, byAssignment.procedure);
+            const screeningPool = mergeDutyPools(byAssignment.screening, byAssignment.er, byAssignment.procedure);
+            const procedurePool = mergeDutyPools(byAssignment.procedure, byAssignment.er, byAssignment.screening);
             return [
-                ...requirements.er.map((requirement) => ({ requirement, pool: byAssignment.er, group: 'er' })),
-                ...requirements.screening.map((requirement) => ({ requirement, pool: byAssignment.screening.concat(byAssignment.er), group: 'screening' })),
-                ...requirements.procedure.map((requirement) => ({ requirement, pool: byAssignment.procedure.concat(byAssignment.er), group: 'procedure' }))
+                ...requirements.er.map((requirement) => ({ requirement, pool: erPool, group: 'er' })),
+                ...requirements.screening.map((requirement) => ({ requirement, pool: screeningPool, group: 'screening' })),
+                ...requirements.procedure.map((requirement) => ({ requirement, pool: procedurePool, group: 'procedure' }))
             ]
                 .filter((item) => item.requirement.count > 0)
                 .sort((a, b) => getDutyRequirementOrder(a.requirement.code) - getDutyRequirementOrder(b.requirement.code));
         }
 
-        function generateDutyRoster() {
+        function getDutyRosterSignature(result) {
+            return result.users
+                .map((user) => {
+                    const key = getUserIdentityKey(user);
+                    return `${key}:${(result.roster[key] || []).join(',')}`;
+                })
+                .join('|');
+        }
+
+        function generateDutyRoster(options = {}) {
             const monthKey = getDutyRosterMonthKey();
             const rosterUsers = getDutyRosterSelectedUsers().filter((user) => !getDutyStaffRule(user).excluded);
             if (!rosterUsers.length) {
@@ -5107,8 +5198,9 @@
                 return;
             }
             dutyRosterState.generationRun += 1;
+            dutyRosterState.generationSeed = Date.now() + Math.floor(Math.random() * 1000000) + (dutyRosterState.generationRun * 7919);
             dutyRosterState.randomTieBreakers = Object.fromEntries(
-                rosterUsers.map((user) => [getUserIdentityKey(user), Math.random()])
+                rosterUsers.map((user) => [getUserIdentityKey(user), Math.random() + (options.forceNewRun ? Math.random() : 0)])
             );
             const positionType = getDutyRosterPositionType(
                 document.getElementById('duty-roster-position').value,
@@ -5161,9 +5253,17 @@
                 });
             });
 
-            dutyRosterState.generated = { monthKey, positionType, users: rosterUsers, days, roster, stats, warnings, minWorkTarget, lockedOffCells, requestedCells, generationRun: dutyRosterState.generationRun };
-            rebalanceDutyRosterMinimumWork(dutyRosterState.generated);
-            appendDutyRosterBalanceWarnings(dutyRosterState.generated);
+            const generatedResult = { monthKey, positionType, users: rosterUsers, days, roster, stats, warnings, minWorkTarget, lockedOffCells, requestedCells, generationRun: dutyRosterState.generationRun };
+            rebalanceDutyRosterMinimumWork(generatedResult);
+            appendDutyRosterBalanceWarnings(generatedResult);
+            const signature = getDutyRosterSignature(generatedResult);
+            const retryCount = Number(options.retryCount || 0);
+            if (options.forceNewRun && dutyRosterState.lastRosterSignature && signature === dutyRosterState.lastRosterSignature && retryCount < 4) {
+                generateDutyRoster({ ...options, retryCount: retryCount + 1 });
+                return;
+            }
+            dutyRosterState.generated = generatedResult;
+            dutyRosterState.lastRosterSignature = signature;
             renderDutyRosterOutput();
         }
 
@@ -5907,7 +6007,7 @@
         }
 
         function getThaiWeekdayShort(dateStr) {
-            return ['อ', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'][new Date(`${dateStr}T00:00:00`).getDay()];
+            return ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'][new Date(`${dateStr}T00:00:00`).getDay()];
         }
 
         function getMonthlyHolidayClass(dateStr) {
