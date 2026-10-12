@@ -4890,9 +4890,9 @@
             if (positionType === 'REFERRAL_RN') {
                 return {
                     er: [
+                        applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), requiredMinLevel: 3 }),
                         applyDutyMainLevelOverride(positionType, 'erMorning', { code: 'ช', count: staffing('erMorning'), levelGroup: { levels: [3, 4, 5], min: 1, max: staffing('erMorning') } }),
-                        applyDutyMainLevelOverride(positionType, 'erAfternoon', { code: 'บ', count: staffing('erAfternoon'), levelGroup: { levels: [3, 4, 5], min: 1, max: staffing('erAfternoon') } }),
-                        applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), requiredMinLevel: 3 })
+                        applyDutyMainLevelOverride(positionType, 'erAfternoon', { code: 'บ', count: staffing('erAfternoon'), levelGroup: { levels: [3, 4, 5], min: 1, max: staffing('erAfternoon') } })
                     ],
                     procedure: [],
                     screening: []
@@ -4901,9 +4901,9 @@
             if (positionType === 'REFERRAL_PN') {
                 return {
                     er: [
+                        applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), requiredMinLevel: 2 }),
                         applyDutyMainLevelOverride(positionType, 'erMorning', { code: 'ช', count: staffing('erMorning'), levelGroup: { levels: [2, 3, 4, 5], min: 1, max: staffing('erMorning') } }),
-                        applyDutyMainLevelOverride(positionType, 'erAfternoon', { code: 'บ', count: staffing('erAfternoon'), levelGroup: { levels: [2, 3, 4, 5], min: 1, max: staffing('erAfternoon') } }),
-                        applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), requiredMinLevel: 2 })
+                        applyDutyMainLevelOverride(positionType, 'erAfternoon', { code: 'บ', count: staffing('erAfternoon'), levelGroup: { levels: [2, 3, 4, 5], min: 1, max: staffing('erAfternoon') } })
                     ],
                     procedure: [],
                     screening: []
@@ -4912,9 +4912,9 @@
             if (positionType === 'GENERAL') {
                 return {
                     er: [
+                        applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), levelGroup: { levels: [2, 3, 4, 5], min: 1, max: 1 } }),
                         applyDutyMainLevelOverride(positionType, 'erMorning', { code: 'ช', count: staffing('erMorning'), levelGroup: { levels: [2, 3, 4, 5], min: 1, max: 2 } }),
-                        applyDutyMainLevelOverride(positionType, 'erAfternoon', { code: 'บ', count: staffing('erAfternoon'), levelGroup: { levels: [2, 3, 4, 5], min: 1, max: 2 } }),
-                        applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), levelGroup: { levels: [2, 3, 4, 5], min: 1, max: 1 } })
+                        applyDutyMainLevelOverride(positionType, 'erAfternoon', { code: 'บ', count: staffing('erAfternoon'), levelGroup: { levels: [2, 3, 4, 5], min: 1, max: 2 } })
                     ],
                     procedure: [],
                     screening: []
@@ -4923,9 +4923,9 @@
             if (positionType === 'PN') {
                 return {
                     er: [
+                        applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), levelGroup: { levels: [2], min: 1, max: 1 } }),
                         applyDutyMainLevelOverride(positionType, 'erMorning', { code: 'ช', count: staffing('erMorning'), levelGroup: { levels: [2], min: 2, max: 3 } }),
-                        applyDutyMainLevelOverride(positionType, 'erAfternoon', { code: 'บ', count: staffing('erAfternoon'), levelGroup: { levels: [2], min: 2, max: 3 } }),
-                        applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), levelGroup: { levels: [2], min: 1, max: 1 } })
+                        applyDutyMainLevelOverride(positionType, 'erAfternoon', { code: 'บ', count: staffing('erAfternoon'), levelGroup: { levels: [2], min: 2, max: 3 } })
                     ],
                     procedure: [applyDutyMainLevelOverride(positionType, dayInfo.isHoliday ? 'procedureHoliday' : 'procedureWeekday', { code: 'ชG', count: dayInfo.isHoliday ? staffing('procedureHoliday') : staffing('procedureWeekday'), levelMin: { min3: 1 }, preferPrimaryWeekdays: true })],
                     screening: dayInfo.isWeekend
@@ -4937,9 +4937,9 @@
             }
             return {
                 er: [
+                    applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), levelMin: { 5: 2, 4: 1, 3: 1 } }),
                     applyDutyMainLevelOverride(positionType, 'erMorning', { code: 'ช', count: staffing('erMorning'), levelMin: dayInfo.isHoliday ? { 5: 3, 4: 1, 3: 1 } : { 5: 2, 4: 1, 3: 1 }, levelMax: dayInfo.isHoliday ? { 5: 3, 4: 2 } : { 5: 3, 4: 2 }, levelGroupMin: { levels: [3, 4, 5], min: 5 } }),
-                    applyDutyMainLevelOverride(positionType, 'erAfternoon', { code: 'บ', count: staffing('erAfternoon'), levelMin: dayInfo.isHoliday ? { 5: 3, 4: 1, 3: 1 } : { 5: 2, 4: 1, 3: 1 }, levelMax: dayInfo.isHoliday ? { 5: 3, 4: 2 } : { 5: 3, 4: 2 }, levelGroupMin: { levels: [3, 4, 5], min: 5 } }),
-                    applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), levelMin: { 5: 2, 4: 1, 3: 1 } })
+                    applyDutyMainLevelOverride(positionType, 'erAfternoon', { code: 'บ', count: staffing('erAfternoon'), levelMin: dayInfo.isHoliday ? { 5: 3, 4: 1, 3: 1 } : { 5: 2, 4: 1, 3: 1 }, levelMax: dayInfo.isHoliday ? { 5: 3, 4: 2 } : { 5: 3, 4: 2 }, levelGroupMin: { levels: [3, 4, 5], min: 5 } })
                 ],
                 procedure: [applyDutyMainLevelOverride(positionType, dayInfo.isHoliday ? 'procedureHoliday' : 'procedureWeekday', { code: 'ชG', count: dayInfo.isHoliday ? staffing('procedureHoliday') : staffing('procedureWeekday'), levelMin: { min3: 1 }, preferPrimaryWeekdays: true })],
                 screening: dayInfo.isWeekend
