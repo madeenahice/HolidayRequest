@@ -4879,7 +4879,6 @@
                                 });
                             }
                         });
-                        rejectedRequests.push(`${request.name || user.name}: ${request.leaveType || '-'} วันที่ ${monthDates.map(formatDisplayDate).join(', ')} เป็น Pending แต่ระบบนำมาจัดร่วม หากทำให้อัตรากำลังไม่พอจะแสดงเตือนในตาราง`);
                     }
                 });
             return { leaveMap, rejectedRequests };
@@ -5254,6 +5253,7 @@
             const minWorkTarget = getDutyWorkdayCount(days);
             const lockedOffCells = {};
             const requestedCells = {};
+            const pendingCells = {};
 
             rosterUsers.forEach((user) => {
                 const key = getUserIdentityKey(user);
@@ -5262,6 +5262,10 @@
                     if (leave) {
                         if (!requestedCells[key]) requestedCells[key] = {};
                         requestedCells[key][dayIndex] = true;
+                        if (leave.pending) {
+                            if (!pendingCells[key]) pendingCells[key] = {};
+                            pendingCells[key][dayIndex] = true;
+                        }
                     }
                     if (leave?.symbol === 'X') {
                         if (!lockedOffCells[key]) lockedOffCells[key] = {};
@@ -5293,7 +5297,7 @@
                 });
             });
 
-            const generatedResult = { monthKey, positionType, users: rosterUsers, days, roster, stats, warnings, minWorkTarget, lockedOffCells, requestedCells, generationRun: dutyRosterState.generationRun };
+            const generatedResult = { monthKey, positionType, users: rosterUsers, days, roster, stats, warnings, minWorkTarget, lockedOffCells, requestedCells, pendingCells, generationRun: dutyRosterState.generationRun };
             rebalanceDutyRosterMinimumWork(generatedResult);
             appendDutyRosterBalanceWarnings(generatedResult);
             const signature = getDutyRosterSignature(generatedResult);
@@ -5356,7 +5360,10 @@
                                         </td>
                                         ${result.roster[key].map((value, index) => {
                                             const isRequested = Boolean(result.requestedCells?.[key]?.[index]);
-                                            const buttonClass = isRequested
+                                            const isPending = Boolean(result.pendingCells?.[key]?.[index]);
+                                            const buttonClass = isPending
+                                                ? 'bg-yellow-100 text-yellow-800 ring-1 ring-yellow-300 hover:bg-yellow-200'
+                                                : isRequested
                                                 ? 'bg-red-50 text-red-700 ring-1 ring-red-200 hover:bg-red-100'
                                                 : value === 'X'
                                                     ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
@@ -5604,54 +5611,36 @@
         }
 
         function appendDutyRosterBalanceWarnings(result) {
-            const warningPrefix = 'สมดุลเวร:';
-            result.warnings = result.warnings.filter((warning) => !String(warning).startsWith(warningPrefix));
-            appendDutyRosterMinimumWorkWarnings(result);
-            const usersByLevel = new Map();
-            result.users.forEach((user) => {
-                const level = normalizeLevelName(user.level);
-                const assignment = getDutyStaffRule(user).assignment || 'er';
-                const groupKey = `${level}|${assignment}`;
-                if (!usersByLevel.has(groupKey)) usersByLevel.set(groupKey, { level, assignment, users: [] });
-                usersByLevel.get(groupKey).users.push(user);
-            });
-
-            usersByLevel.forEach((group) => {
-                const levelUsers = group.users;
-                const comparableUsers = levelUsers.filter((user) => {
-                    const stat = result.stats[getUserIdentityKey(user)] || {};
-                    return (stat.leave || 0) === 0;
-                });
-                if (comparableUsers.length < 2) return;
-
-                const getRange = (field) => {
-                    const values = comparableUsers.map((user) => result.stats[getUserIdentityKey(user)]?.[field] || 0);
-                    return Math.max(...values) - Math.min(...values);
-                };
-                const getMorningRange = () => {
-                    const values = comparableUsers.map((user) => getDutyBalanceCount(result.stats[getUserIdentityKey(user)] || {}, 'ช'));
-                    return Math.max(...values) - Math.min(...values);
-                };
-                const workRange = getRange('work');
-                const offRange = getRange('off');
-                const morningRange = getMorningRange();
-                const afternoonRange = getRange('บ');
-                const nightRange = getRange('ด');
-                if (workRange > 2) {
-                    result.warnings.push(`${warningPrefix} ${group.level} (${group.assignment}) จำนวนเวรรวมต่างกัน ${workRange} เวร`);
-                }
-                if (offRange > 2) {
-                    result.warnings.push(`${warningPrefix} ${group.level} (${group.assignment}) วันหยุดต่างกัน ${offRange} วัน`);
-                }
-                if (morningRange > 2) {
-                    result.warnings.push(`${warningPrefix} ${group.level} (${group.assignment}) เวรเช้าต่างกัน ${morningRange} เวร`);
-                }
-                if (afternoonRange > 2) {
-                    result.warnings.push(`${warningPrefix} ${group.level} (${group.assignment}) เวรบ่ายต่างกัน ${afternoonRange} เวร`);
-                }
-                if (nightRange > 2) {
-                    result.warnings.push(`${warningPrefix} ${group.level} (${group.assignment}) เวรดึกต่างกัน ${nightRange} เวร`);
-                }
+            // Report only daily staffing shortages, using the final roster after edits.
+            result.warnings = [];
+            result.days.forEach((dayInfo, dayIndex) => {
+                const requirements = getDutyRequirements(result.positionType, dayInfo);
+                [...requirements.er, ...requirements.screening, ...requirements.procedure]
+                    .filter((requirement) => requirement.count > 0)
+                    .forEach((requirement) => {
+                        const assigned = getDutyRosterAssignedUsers(result, dayIndex, requirement.code);
+                        const problems = [];
+                        const check = (label, actual, minimum) => {
+                            if (actual < Number(minimum || 0)) problems.push(`${label} ${actual}/${minimum} คน`);
+                        };
+                        check('จัดได้', assigned.length, requirement.count);
+                        Object.entries(requirement.levelMin || {}).forEach(([levelText, minimum]) => {
+                            const threshold = levelText === 'min3' ? 3 : 4;
+                            const atLeast = ['min3', 'min4', '4'].includes(levelText);
+                            const actual = assigned.filter((user) => atLeast ? getLevelOrder(user.level) >= threshold : getLevelOrder(user.level) === Number(levelText)).length;
+                            check(`Level ${atLeast ? threshold + ' ขึ้นไป' : levelText} มี`, actual, minimum);
+                        });
+                        if (requirement.requiredMinLevel) {
+                            check(`Level ${requirement.requiredMinLevel} ขึ้นไป มี`, assigned.filter((user) => getLevelOrder(user.level) >= requirement.requiredMinLevel).length, requirement.count);
+                        }
+                        [requirement.levelGroup, requirement.levelGroupMin].filter(Boolean).forEach((group) => {
+                            check(`Level ${group.levels.join('/')} รวม`, assigned.filter((user) => group.levels.includes(getLevelOrder(user.level))).length, group.min);
+                        });
+                        if (problems.length) {
+                            const hasPending = result.users.some((user) => result.pendingCells?.[getUserIdentityKey(user)]?.[dayIndex]);
+                            result.warnings.push(`${formatDisplayDate(dayInfo.date)} เวร ${requirement.code}: ${[...new Set(problems)].join(' • ')}${hasPending ? ' (วันนี้มีคำขอ Pending ร่วมจัดเวร)' : ''}`);
+                        }
+                    });
             });
         }
 
