@@ -4387,11 +4387,14 @@
         }
 
         function getDutyStaffingValue(positionType, key) {
+            if (['REFERRAL_RN', 'REFERRAL_PN'].includes(positionType) && key === 'erNight') return 1;
             const defaults = getDefaultDutyStaffing(positionType);
             const scopeKey = getDutyStaffingScopeKey();
             const value = dutyRosterState.staffing[scopeKey]?.[positionType]?.[key];
             const numericValue = Number(value);
-            return Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : (defaults[key] || 0);
+            const effectiveValue = Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : (defaults[key] || 0);
+            return ['REFERRAL_RN', 'REFERRAL_PN'].includes(positionType) && ['erMorning', 'erAfternoon'].includes(key)
+                ? Math.min(2, effectiveValue) : effectiveValue;
         }
 
         function getDutyStaffingLevelValue(positionType, key, valueKey) {
@@ -4424,8 +4427,12 @@
             const scopeKey = getDutyStaffingScopeKey();
             if (!dutyRosterState.staffing[scopeKey]) dutyRosterState.staffing[scopeKey] = {};
             if (!dutyRosterState.staffing[scopeKey][positionType]) dutyRosterState.staffing[scopeKey][positionType] = {};
-            const numericValue = Math.max(0, Number(value || 0));
+            const numericValue = ['REFERRAL_RN', 'REFERRAL_PN'].includes(positionType) && ['erMorning', 'erAfternoon'].includes(key)
+                ? Math.min(2, Math.max(0, Number(value || 0))) : Math.max(0, Number(value || 0));
             dutyRosterState.staffing[scopeKey][positionType][key] = numericValue;
+            if (['REFERRAL_RN', 'REFERRAL_PN'].includes(positionType) && key === 'erNight') {
+                dutyRosterState.staffing[scopeKey][positionType][key] = 1;
+            }
             dutyRosterState.generated = null;
             saveDutyStaffingSettings();
             renderDutyRosterOutput();
@@ -4537,7 +4544,7 @@
                     </label>
                     <label class="mt-2 block text-xs font-semibold text-indigo-900">
                         จำนวนคนขึ้นเวร
-                        <input type="number" min="0" step="1" value="${getDutyStaffingValue(positionType, key)}"
+                        <input type="number" min="${['REFERRAL_RN', 'REFERRAL_PN'].includes(positionType) && key === 'erNight' ? 1 : 0}" step="1" ${['REFERRAL_RN', 'REFERRAL_PN'].includes(positionType) ? (key === 'erNight' ? 'max="1" readonly' : ['erMorning', 'erAfternoon'].includes(key) ? 'max="2"' : '') : ''} value="${getDutyStaffingValue(positionType, key)}"
                             onchange="setDutyStaffingValue('${positionType}', '${key}', this.value)"
                             class="mt-1 w-full rounded-lg border border-indigo-200 bg-white p-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500">
                     </label>
@@ -4660,6 +4667,10 @@
             return getCanonicalDepartmentName(department) === 'รับ-ส่งต่อ';
         }
 
+        function isEmergencyMedicalServiceDepartment(department) {
+            return getCanonicalDepartmentName(department) === 'หน่วยบริการทางการแพทย์ฉุกเฉิน';
+        }
+
         function getDutyRosterPositionType(position, department = '') {
             if (isReferralDepartment(department)) {
                 if (isPnPosition(position)) return 'REFERRAL_PN';
@@ -4676,9 +4687,11 @@
         }
 
         function getDefaultDutyAssignment(user) {
+            if (isEmergencyMedicalServiceDepartment(user.department)) return 'ems';
             const name = normalizeDutyName(user.name);
             const positionType = getDutyRosterPositionType(user.position, user.department);
-            if (['REFERRAL_RN', 'REFERRAL_PN', 'GENERAL'].includes(positionType)) return 'er';
+            if (['REFERRAL_RN', 'REFERRAL_PN'].includes(positionType)) return 'refer';
+            if (positionType === 'GENERAL') return 'er';
             if (positionType === 'RN') {
                 if (['ภัทรนิษ', 'กัลติษา'].some((item) => name.includes(normalizeDutyName(item)))) return 'procedure';
                 if (['ทัศณีย์แซ่เจีย', 'สุดารัตน์สร้อยสังวาลย์'].some((item) => name.includes(normalizeDutyName(item)))) return 'screening';
@@ -4693,6 +4706,16 @@
             return ['สถิตสาทอน', 'กรอุมาไกรเพชร', 'สำเริงคงศิลา'].some((item) => name.includes(normalizeDutyName(item)));
         }
 
+        function getDutyAssignmentOptions(user) {
+            if (isReferralDepartment(user.department)) return [{ value: 'refer', label: 'refer' }];
+            if (isEmergencyMedicalServiceDepartment(user.department)) return [{ value: 'ems', label: 'บริการทางการแพทย์ฉุกเฉิน' }];
+            return [
+                { value: 'er', label: 'ER' },
+                { value: 'procedure', label: 'หัตถการ' },
+                { value: 'screening', label: 'คัดกรอง' }
+            ];
+        }
+
         function getDutyStaffRule(user) {
             const key = getUserIdentityKey(user);
             if (!dutyRosterState.staffRules[key]) {
@@ -4704,6 +4727,12 @@
             }
             if (typeof dutyRosterState.staffRules[key].noNight !== 'boolean') {
                 dutyRosterState.staffRules[key].noNight = getDefaultNoNightDuty(user);
+            }
+            const options = getDutyAssignmentOptions(user);
+            if (!options.some((option) => option.value === dutyRosterState.staffRules[key].assignment)) {
+                const defaultAssignment = getDefaultDutyAssignment(user);
+                dutyRosterState.staffRules[key].assignment = options.some((option) => option.value === defaultAssignment)
+                    ? defaultAssignment : options[0].value;
             }
             return dutyRosterState.staffRules[key];
         }
@@ -4751,9 +4780,7 @@
                             </div>
                             <div class="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto]">
                                 <select onchange="setDutyStaffAssignment('${escapeInlineValue(key)}', this.value)" class="min-w-0 rounded-md border border-indigo-100 bg-white p-1.5">
-                                    <option value="er" ${rule.assignment === 'er' ? 'selected' : ''}>ER</option>
-                                    <option value="procedure" ${rule.assignment === 'procedure' ? 'selected' : ''}>ประจำหัตถการ</option>
-                                    <option value="screening" ${rule.assignment === 'screening' ? 'selected' : ''}>ประจำคัดกรอง</option>
+                                    ${getDutyAssignmentOptions(user).map((option) => `<option value="${option.value}" ${rule.assignment === option.value ? 'selected' : ''}>${option.label}</option>`).join('')}
                                 </select>
                                 <label class="inline-flex items-center gap-1 whitespace-nowrap">
                                     <input type="checkbox" ${rule.noNight ? 'checked' : ''} onchange="setDutyStaffNoNight('${escapeInlineValue(key)}', this.checked)">
@@ -4771,6 +4798,8 @@
         }
 
         window.setDutyStaffAssignment = function(key, assignment) {
+            const user = users.find((item) => getUserIdentityKey(item) === key);
+            if (!user || !getDutyAssignmentOptions(user).some((option) => option.value === assignment)) return;
             if (!dutyRosterState.staffRules[key]) dutyRosterState.staffRules[key] = {};
             dutyRosterState.staffRules[key].assignment = assignment;
             dutyRosterState.generated = null;
@@ -4884,14 +4913,25 @@
             return { leaveMap, rejectedRequests };
         }
 
+        function getReferralDayRequirement(positionType, key, code, count) {
+            const cappedCount = Math.min(2, Math.max(0, Number(count) || 0));
+            return {
+                ...applyDutyMainLevelOverride(positionType, key, { code, count: cappedCount }),
+                count: cappedCount,
+                maxCount: 2,
+                levelGroupMin: { levels: [3, 4, 5], min: 1 },
+                levelGroupMax: { levels: [1, 2], max: 1 }
+            };
+        }
+
         function getDutyRequirements(positionType, dayInfo) {
             const staffing = (key) => getDutyStaffingValue(positionType, key);
             if (positionType === 'REFERRAL_RN') {
                 return {
                     er: [
-                        applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), requiredMinLevel: 3 }),
-                        applyDutyMainLevelOverride(positionType, 'erMorning', { code: 'ช', count: staffing('erMorning'), levelGroup: { levels: [3, 4, 5], min: 1, max: staffing('erMorning') } }),
-                        applyDutyMainLevelOverride(positionType, 'erAfternoon', { code: 'บ', count: staffing('erAfternoon'), levelGroup: { levels: [3, 4, 5], min: 1, max: staffing('erAfternoon') } })
+                        { ...applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: 1, requiredMinLevel: 3 }), count: 1, maxCount: 1 },
+                        getReferralDayRequirement(positionType, 'erMorning', 'ช', staffing('erMorning')),
+                        getReferralDayRequirement(positionType, 'erAfternoon', 'บ', staffing('erAfternoon'))
                     ],
                     procedure: [],
                     screening: []
@@ -4900,9 +4940,9 @@
             if (positionType === 'REFERRAL_PN') {
                 return {
                     er: [
-                        applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), requiredMinLevel: 2 }),
-                        applyDutyMainLevelOverride(positionType, 'erMorning', { code: 'ช', count: staffing('erMorning'), levelGroup: { levels: [2, 3, 4, 5], min: 1, max: staffing('erMorning') } }),
-                        applyDutyMainLevelOverride(positionType, 'erAfternoon', { code: 'บ', count: staffing('erAfternoon'), levelGroup: { levels: [2, 3, 4, 5], min: 1, max: staffing('erAfternoon') } })
+                        { ...applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: 1, requiredMinLevel: 2 }), count: 1, maxCount: 1 },
+                        getReferralDayRequirement(positionType, 'erMorning', 'ช', staffing('erMorning')),
+                        getReferralDayRequirement(positionType, 'erAfternoon', 'บ', staffing('erAfternoon'))
                     ],
                     procedure: [],
                     screening: []
@@ -4911,9 +4951,9 @@
             if (positionType === 'GENERAL') {
                 return {
                     er: [
-                        applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), levelGroup: { levels: [2, 3, 4, 5], min: 1, max: 1 } }),
-                        applyDutyMainLevelOverride(positionType, 'erMorning', { code: 'ช', count: staffing('erMorning'), levelGroup: { levels: [2, 3, 4, 5], min: 1, max: 2 } }),
-                        applyDutyMainLevelOverride(positionType, 'erAfternoon', { code: 'บ', count: staffing('erAfternoon'), levelGroup: { levels: [2, 3, 4, 5], min: 1, max: 2 } })
+                        { code: 'ด', count: staffing('erNight'), mixLevels: true },
+                        { code: 'ช', count: staffing('erMorning'), mixLevels: true },
+                        { code: 'บ', count: staffing('erAfternoon'), mixLevels: true }
                     ],
                     procedure: [],
                     screening: []
@@ -5021,7 +5061,7 @@
             return stat[code] || 0;
         }
 
-        function pickDutyCandidates(roster, stats, pool, dayIndex, code, count, levelMin = {}, requiredMinLevel = 0, levelGroup = null, levelMax = {}, coreQuota = null) {
+        function pickDutyCandidates(roster, stats, pool, dayIndex, code, count, levelMin = {}, requiredMinLevel = 0, levelGroup = null, levelMax = {}, coreQuota = null, groupMax = null, mixLevels = false) {
             const picked = [];
             const poolPriority = new Map();
             const eligiblePool = [];
@@ -5053,11 +5093,13 @@
                 const candidate = eligiblePool
                     .filter((user) => !picked.some((item) => getUserIdentityKey(item) === getUserIdentityKey(user)))
                     .filter((user) => predicate(user))
+                    .filter((user) => !groupMax || !groupMax.levels.includes(getLevelOrder(user.level))
+                        || picked.filter((item) => groupMax.levels.includes(getLevelOrder(item.level))).length < groupMax.max)
                     .filter((user) => canAssignDuty(roster, user, dayIndex, code))
                     .sort((a, b) => {
                         const aStats = stats[getUserIdentityKey(a)];
                         const bStats = stats[getUserIdentityKey(b)];
-                        const sameLevel = normalizeLevelName(a.level) === normalizeLevelName(b.level);
+                        const sameLevel = mixLevels || normalizeLevelName(a.level) === normalizeLevelName(b.level);
                         const minimumWorkBalance = getWorkDeficit(b) - getWorkDeficit(a);
                         const sameLevelDutyBalance = sameLevel && ['ช', 'บ', 'ด'].includes(code)
                             ? getDutyBalanceCount(aStats, code) - getDutyBalanceCount(bStats, code)
@@ -5078,7 +5120,7 @@
                             || sameLevelWorkBalance
                             || getLoadRatio(a, 'work') - getLoadRatio(b, 'work')
                             || getDutyBalanceCount(aStats, code) - getDutyBalanceCount(bStats, code)
-                            || getLevelOrder(b.level) - getLevelOrder(a.level)
+                            || (mixLevels ? 0 : getLevelOrder(b.level) - getLevelOrder(a.level))
                             || getDutyRosterRunJitter(a, dayIndex, code) - getDutyRosterRunJitter(b, dayIndex, code)
                             || getTieBreaker(a) - getTieBreaker(b)
                             || a.name.localeCompare(b.name, 'th');
@@ -5113,6 +5155,7 @@
             const isInCoreQuota = (user) => (coreQuota?.levels || []).includes(getLevelOrder(user.level));
             const coreQuotaCount = () => picked.filter(isInCoreQuota).length;
             while (picked.length < count
+                && !mixLevels
                 && (!coreQuota || coreQuotaCount() < Number(coreQuota.min || 0))
                 && pickOne(coreQuota ? (user) => isInCoreQuota(user) && isWithinLevelMax(user) : seniorCorePredicate)) {
                 // Complete the required core before filling remaining places with other levels.
@@ -5159,7 +5202,7 @@
         function assignDutyBlock(roster, stats, warnings, pool, dayInfo, dayIndex, requirement, primaryPool = []) {
             let picked = [];
             if (requirement.preferPrimaryWeekdays && isDutyWeekday(dayInfo) && primaryPool.length) {
-                picked = pickDutyCandidates(roster, stats, primaryPool, dayIndex, requirement.code, requirement.count, requirement.levelMin || {}, requirement.requiredMinLevel || 0, requirement.levelGroup || null, requirement.levelMax || {}, requirement.levelGroupMin || null);
+                picked = pickDutyCandidates(roster, stats, primaryPool, dayIndex, requirement.code, requirement.count, requirement.levelMin || {}, requirement.requiredMinLevel || 0, requirement.levelGroup || null, requirement.levelMax || {}, requirement.levelGroupMin || null, requirement.levelGroupMax || null, Boolean(requirement.mixLevels));
                 assignPickedDutyUsers(roster, stats, dayIndex, requirement, picked);
             }
             if (picked.length < requirement.count) {
@@ -5170,7 +5213,7 @@
                     ...requirement.levelGroupMin,
                     min: Math.max(0, requirement.levelGroupMin.min - picked.filter((user) => requirement.levelGroupMin.levels.includes(getLevelOrder(user.level))).length)
                 } : null;
-                const fallbackPicked = pickDutyCandidates(roster, stats, remainingPool, dayIndex, requirement.code, requirement.count - picked.length, remainingLevelMin, requirement.requiredMinLevel || 0, requirement.levelGroup || null, requirement.levelMax || {}, remainingCoreQuota);
+                const fallbackPicked = pickDutyCandidates(roster, stats, remainingPool, dayIndex, requirement.code, requirement.count - picked.length, remainingLevelMin, requirement.requiredMinLevel || 0, requirement.levelGroup || null, requirement.levelMax || {}, remainingCoreQuota, requirement.levelGroupMax || null, Boolean(requirement.mixLevels));
                 assignPickedDutyUsers(roster, stats, dayIndex, requirement, fallbackPicked);
                 picked = [...picked, ...fallbackPicked];
             }
@@ -5294,7 +5337,7 @@
             days.forEach((dayInfo, dayIndex) => {
                 const requirements = getDutyRequirements(positionType, dayInfo);
                 const byAssignment = {
-                    er: rosterUsers.filter((user) => getDutyStaffRule(user).assignment === 'er'),
+                    er: rosterUsers.filter((user) => ['er', 'refer', 'ems'].includes(getDutyStaffRule(user).assignment)),
                     procedure: rosterUsers.filter((user) => getDutyStaffRule(user).assignment === 'procedure'),
                     screening: rosterUsers.filter((user) => getDutyStaffRule(user).assignment === 'screening')
                 };
@@ -5312,6 +5355,7 @@
 
             const generatedResult = { monthKey, positionType, users: rosterUsers, days, roster, stats, warnings, minWorkTarget, lockedOffCells, requestedCells, pendingCells, generationRun: dutyRosterState.generationRun };
             rebalanceDutyRosterMinimumWork(generatedResult);
+            if (['REFERRAL_RN', 'REFERRAL_PN', 'GENERAL'].includes(positionType)) rebalanceReferralTotalWork(generatedResult);
             rebalanceDutyRosterShiftCounts(generatedResult);
             appendDutyRosterBalanceWarnings(generatedResult);
             const signature = getDutyRosterSignature(generatedResult);
@@ -5450,7 +5494,9 @@
 
         function isDutyRequirementSatisfied(result, dayIndex, requirement) {
             const assignedUsers = getDutyRosterAssignedUsers(result, dayIndex, requirement.code);
+            if (requirement.levelGroupMax && assignedUsers.filter((user) => requirement.levelGroupMax.levels.includes(getLevelOrder(user.level))).length > requirement.levelGroupMax.max) return false;
             if (assignedUsers.length < requirement.count) return false;
+            if (requirement.maxCount != null && assignedUsers.length > requirement.maxCount) return false;
             if (requirement.requiredMinLevel && assignedUsers.some((user) => getLevelOrder(user.level) < requirement.requiredMinLevel)) return false;
 
             if (requirement.levelMin) {
@@ -5531,6 +5577,32 @@
             });
         }
 
+        function rebalanceReferralTotalWork(result) {
+            recalculateDutyRosterStats(result);
+            let moved = true;
+            while (moved) {
+                moved = false;
+                const ordered = [...result.users].sort((a, b) => result.stats[getUserIdentityKey(a)].work - result.stats[getUserIdentityKey(b)].work);
+                search: for (const target of ordered) {
+                    for (const source of [...ordered].reverse()) {
+                        const sourceStat = result.stats[getUserIdentityKey(source)];
+                        const targetStat = result.stats[getUserIdentityKey(target)];
+                        if (sourceStat.work <= sourceStat.minWorkTarget || sourceStat.work - targetStat.work <= 1) continue;
+                        for (let dayIndex = 0; dayIndex < result.days.length; dayIndex += 1) {
+                            for (const code of getDutyRosterCellCodes(result.roster[getUserIdentityKey(source)][dayIndex])) {
+                                if (!['ช', 'บ', 'ด'].includes(code)) continue;
+                                if (tryReassignDutyCodeForMinimumWork(result, source, target, dayIndex, code)) {
+                                    recalculateDutyRosterStats(result);
+                                    moved = true;
+                                    break search;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         function isDutySpecialAssignment(user) {
             return ['screening', 'procedure'].includes(getDutyStaffRule(user).assignment);
         }
@@ -5539,7 +5611,7 @@
             const groups = new Map();
             result.users.forEach((user) => {
                 if (isDutySpecialAssignment(user)) return;
-                const level = normalizeLevelName(user.level);
+                const level = result.positionType === 'GENERAL' ? 'ทุก Level' : normalizeLevelName(user.level);
                 if (!groups.has(level)) groups.set(level, []);
                 groups.get(level).push(user);
             });
@@ -5567,7 +5639,7 @@
                     for (const source of donors) {
                         const sourceKey = getUserIdentityKey(source);
                         const targets = result.users.filter((user) => !isDutySpecialAssignment(user)
-                            && normalizeLevelName(user.level) === normalizeLevelName(source.level)
+                            && (result.positionType === 'GENERAL' || normalizeLevelName(user.level) === normalizeLevelName(source.level))
                             && result.stats[sourceKey][code] - result.stats[getUserIdentityKey(user)][code] > 1
                             && (code !== 'ด' || !getDutyStaffRule(user).noNight))
                             .sort((a, b) => result.stats[getUserIdentityKey(a)][code] - result.stats[getUserIdentityKey(b)][code]);
@@ -5583,6 +5655,8 @@
                                 const exchanges = targetCodes.filter((item) => ['ด', 'ช', 'บ', 'ชG', 'ชS', '6S'].includes(item));
                                 // A transfer or an exchange preserves daily staffing; exchanges also preserve total work.
                                 for (const exchange of [null, ...exchanges]) {
+                                    if (!exchange && ['REFERRAL_RN', 'REFERRAL_PN', 'GENERAL'].includes(result.positionType)
+                                        && result.stats[sourceKey].work - result.stats[targetKey].work <= 1) continue;
                                     const sourceOriginal = result.roster[sourceKey][dayIndex];
                                     const targetOriginal = result.roster[targetKey][dayIndex];
                                     const sourceFloor = Math.min(result.stats[sourceKey].work, result.stats[sourceKey].minWorkTarget);
@@ -5731,6 +5805,14 @@
                             if (actual < Number(minimum || 0)) problems.push(`${label} ${actual}/${minimum} คน`);
                         };
                         check('จัดได้', assigned.length, requirement.count);
+                        if (requirement.maxCount != null && assigned.length > requirement.maxCount) {
+                            problems.push(`จัด ${assigned.length} คน เกินจำนวนสูงสุด ${requirement.maxCount} คน`);
+                        }
+                        if (requirement.levelGroupMax) {
+                            const group = requirement.levelGroupMax;
+                            const actual = assigned.filter((user) => group.levels.includes(getLevelOrder(user.level))).length;
+                            if (actual > group.max) problems.push(`Level ${group.levels.join('/')} รวม ${actual} คน เกิน ${group.max} คน`);
+                        }
                         Object.entries(requirement.levelMin || {}).forEach(([levelText, minimum]) => {
                             const threshold = levelText === 'min3' ? 3 : 4;
                             const atLeast = ['min3', 'min4', '4'].includes(levelText);
@@ -5754,11 +5836,11 @@
         }
 
         function appendDutyRosterShiftBalanceWarnings(result) {
-            const levels = [...new Set(result.users.map((user) => normalizeLevelName(user.level)))];
+            const levels = result.positionType === 'GENERAL' ? ['ทุก Level'] : [...new Set(result.users.map((user) => normalizeLevelName(user.level)))];
             levels.forEach((level) => {
                 ['ด', 'บ'].forEach((code) => {
                     const members = result.users.filter((user) => !isDutySpecialAssignment(user)
-                        && normalizeLevelName(user.level) === level
+                        && (result.positionType === 'GENERAL' || normalizeLevelName(user.level) === level)
                         && (code !== 'ด' || !getDutyStaffRule(user).noNight));
                     const counts = members.map((user) => result.stats[getUserIdentityKey(user)][code] || 0);
                     if (counts.length && Math.max(...counts) - Math.min(...counts) > 1) {
