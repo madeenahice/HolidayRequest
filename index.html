@@ -5021,7 +5021,7 @@
             return stat[code] || 0;
         }
 
-        function pickDutyCandidates(roster, stats, pool, dayIndex, code, count, levelMin = {}, requiredMinLevel = 0, levelGroup = null, levelMax = {}) {
+        function pickDutyCandidates(roster, stats, pool, dayIndex, code, count, levelMin = {}, requiredMinLevel = 0, levelGroup = null, levelMax = {}, coreQuota = null) {
             const picked = [];
             const poolPriority = new Map();
             const eligiblePool = [];
@@ -5068,7 +5068,10 @@
                         const sameLevelWorkBalance = sameLevel
                             ? getLoadRatio(a, 'work') - getLoadRatio(b, 'work')
                             : 0;
-                        return minimumWorkBalance
+                        const specialShiftPriority = ['ด', 'บ'].includes(code)
+                            ? Number(isDutySpecialAssignment(a)) - Number(isDutySpecialAssignment(b)) : 0;
+                        return specialShiftPriority
+                            || minimumWorkBalance
                             || (poolPriority.get(getUserIdentityKey(a)) || 0) - (poolPriority.get(getUserIdentityKey(b)) || 0)
                             || sameLevelDutyBalance
                             || dutyBalance
@@ -5107,14 +5110,20 @@
                     && isWithinLevelMax(user)
                     && (!levelGroup || groupCount < maxGroup || !isInLevelGroup(user));
             };
-            while (picked.length < count && pickOne(seniorCorePredicate)) {
-                // Fill the core of the shift with Level 5/4/3 before using junior levels.
+            const isInCoreQuota = (user) => (coreQuota?.levels || []).includes(getLevelOrder(user.level));
+            const coreQuotaCount = () => picked.filter(isInCoreQuota).length;
+            while (picked.length < count
+                && (!coreQuota || coreQuotaCount() < Number(coreQuota.min || 0))
+                && pickOne(coreQuota ? (user) => isInCoreQuota(user) && isWithinLevelMax(user) : seniorCorePredicate)) {
+                // Complete the required core before filling remaining places with other levels.
             }
             while (picked.length < count) {
                 const groupCount = levelGroup ? picked.filter(isInLevelGroup).length : 0;
                 const maxGroup = levelGroup ? Number(levelGroup.max || count) : count;
                 const preferOutsideGroup = levelGroup && groupCount >= maxGroup;
                 const preferredPredicate = preferOutsideGroup ? (user) => !isInLevelGroup(user) && isWithinLevelMax(user) : isWithinLevelMax;
+                if (coreQuota && coreQuotaCount() >= Number(coreQuota.min || 0)
+                    && pickOne((user) => !isInCoreQuota(user) && preferredPredicate(user))) continue;
                 if (!pickOne(preferredPredicate) && !pickOne(preferOutsideGroup ? (user) => !isInLevelGroup(user) : () => true)) break;
             }
             return picked;
@@ -5150,14 +5159,18 @@
         function assignDutyBlock(roster, stats, warnings, pool, dayInfo, dayIndex, requirement, primaryPool = []) {
             let picked = [];
             if (requirement.preferPrimaryWeekdays && isDutyWeekday(dayInfo) && primaryPool.length) {
-                picked = pickDutyCandidates(roster, stats, primaryPool, dayIndex, requirement.code, requirement.count, requirement.levelMin || {}, requirement.requiredMinLevel || 0, requirement.levelGroup || null, requirement.levelMax || {});
+                picked = pickDutyCandidates(roster, stats, primaryPool, dayIndex, requirement.code, requirement.count, requirement.levelMin || {}, requirement.requiredMinLevel || 0, requirement.levelGroup || null, requirement.levelMax || {}, requirement.levelGroupMin || null);
                 assignPickedDutyUsers(roster, stats, dayIndex, requirement, picked);
             }
             if (picked.length < requirement.count) {
                 const pickedKeys = new Set(picked.map(getUserIdentityKey));
                 const remainingPool = pool.filter((user) => !pickedKeys.has(getUserIdentityKey(user)));
                 const remainingLevelMin = getRemainingLevelMin(requirement.levelMin || {}, picked);
-                const fallbackPicked = pickDutyCandidates(roster, stats, remainingPool, dayIndex, requirement.code, requirement.count - picked.length, remainingLevelMin, requirement.requiredMinLevel || 0, requirement.levelGroup || null, requirement.levelMax || {});
+                const remainingCoreQuota = requirement.levelGroupMin ? {
+                    ...requirement.levelGroupMin,
+                    min: Math.max(0, requirement.levelGroupMin.min - picked.filter((user) => requirement.levelGroupMin.levels.includes(getLevelOrder(user.level))).length)
+                } : null;
+                const fallbackPicked = pickDutyCandidates(roster, stats, remainingPool, dayIndex, requirement.code, requirement.count - picked.length, remainingLevelMin, requirement.requiredMinLevel || 0, requirement.levelGroup || null, requirement.levelMax || {}, remainingCoreQuota);
                 assignPickedDutyUsers(roster, stats, dayIndex, requirement, fallbackPicked);
                 picked = [...picked, ...fallbackPicked];
             }
@@ -5299,6 +5312,7 @@
 
             const generatedResult = { monthKey, positionType, users: rosterUsers, days, roster, stats, warnings, minWorkTarget, lockedOffCells, requestedCells, pendingCells, generationRun: dutyRosterState.generationRun };
             rebalanceDutyRosterMinimumWork(generatedResult);
+            rebalanceDutyRosterShiftCounts(generatedResult);
             appendDutyRosterBalanceWarnings(generatedResult);
             const signature = getDutyRosterSignature(generatedResult);
             const retryCount = Number(options.retryCount || 0);
@@ -5384,7 +5398,7 @@
                     </table>
                 </div>
                 <div class="space-y-2 border-t border-gray-100 p-4 text-xs">
-                    <div class="text-gray-500">สัญลักษณ์: ด = ดึก, ช = เช้า ER, บ = บ่าย, ชG = หัตถการ, ชS = คัดกรอง, X = หยุด, V = ลาพักผ่อน, สีแดง = เวร/วันที่ขอไว้</div>
+                    <div class="text-gray-500">สัญลักษณ์: ด = ดึก, ช = เช้า ER, บ = บ่าย, ชG = หัตถการ, ชS = คัดกรอง, X = หยุด, V = ลาพักผ่อน, สีแดง = คำขอ Approved, สีเหลือง = คำขอ Pending</div>
                     ${result.warnings.length ? `
                         <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800">
                             <div class="mb-1 font-bold">หมายเหตุเตือน</div>
@@ -5492,16 +5506,109 @@
             const targetKey = getUserIdentityKey(targetUser);
             const sourceOriginal = result.roster[sourceKey][dayIndex];
             const targetOriginal = result.roster[targetKey][dayIndex];
+            if (result.requestedCells?.[sourceKey]?.[dayIndex] || result.requestedCells?.[targetKey]?.[dayIndex]) return false;
+            if (isDutyRosterLockedOff(result, targetKey, dayIndex)) return false;
             removeDutyRosterCode(result, sourceKey, dayIndex, code);
+            if (targetOriginal === 'X') result.roster[targetKey][dayIndex] = '';
             const canAssign = canAssignDuty(result.roster, targetUser, dayIndex, code);
             if (canAssign) addDutyRosterCode(result, targetKey, dayIndex, code);
-            const ok = canAssign && isDutyRosterDayRequirementsSatisfied(result, dayIndex);
+            const ok = canAssign && isDutyRosterDayRequirementsSatisfied(result, dayIndex)
+                && isDutyRosterUserSequenceValid(result, sourceUser)
+                && isDutyRosterUserSequenceValid(result, targetUser);
             if (!ok) {
                 result.roster[sourceKey][dayIndex] = sourceOriginal;
                 result.roster[targetKey][dayIndex] = targetOriginal;
                 return false;
             }
             return true;
+        }
+
+        function isDutyRosterUserSequenceValid(result, user) {
+            const key = getUserIdentityKey(user);
+            return result.roster[key].every((cell, dayIndex) => {
+                const codes = getDutyRosterCellCodes(cell).filter((code) => ['ด', 'ช', 'บ', 'ชG', 'ชS', '6S'].includes(code));
+                return !codes.length || canAssignDutyCodeSet(result, user, dayIndex, codes);
+            });
+        }
+
+        function isDutySpecialAssignment(user) {
+            return ['screening', 'procedure'].includes(getDutyStaffRule(user).assignment);
+        }
+
+        function getDutyRosterShiftBalanceScore(result) {
+            const groups = new Map();
+            result.users.forEach((user) => {
+                if (isDutySpecialAssignment(user)) return;
+                const level = normalizeLevelName(user.level);
+                if (!groups.has(level)) groups.set(level, []);
+                groups.get(level).push(user);
+            });
+            let score = 0;
+            groups.forEach((members) => {
+                ['ด', 'บ'].forEach((code) => {
+                    const eligible = members.filter((user) => code !== 'ด' || !getDutyStaffRule(user).noNight);
+                    const counts = eligible.map((user) => result.stats[getUserIdentityKey(user)][code] || 0);
+                    const mean = counts.reduce((sum, count) => sum + count, 0) / Math.max(1, counts.length);
+                    score += counts.reduce((sum, count) => sum + (count - mean) ** 2, 0);
+                });
+            });
+            return score;
+        }
+
+        function rebalanceDutyRosterShiftCounts(result) {
+            recalculateDutyRosterStats(result);
+            let improved = true;
+            while (improved) {
+                improved = false;
+                const oldScore = getDutyRosterShiftBalanceScore(result);
+                search: for (const code of ['ด', 'บ']) {
+                    const donors = result.users.filter((user) => !isDutySpecialAssignment(user))
+                        .sort((a, b) => result.stats[getUserIdentityKey(b)][code] - result.stats[getUserIdentityKey(a)][code]);
+                    for (const source of donors) {
+                        const sourceKey = getUserIdentityKey(source);
+                        const targets = result.users.filter((user) => !isDutySpecialAssignment(user)
+                            && normalizeLevelName(user.level) === normalizeLevelName(source.level)
+                            && result.stats[sourceKey][code] - result.stats[getUserIdentityKey(user)][code] > 1
+                            && (code !== 'ด' || !getDutyStaffRule(user).noNight))
+                            .sort((a, b) => result.stats[getUserIdentityKey(a)][code] - result.stats[getUserIdentityKey(b)][code]);
+                        for (const target of targets) {
+                            const targetKey = getUserIdentityKey(target);
+                            for (let dayIndex = 0; dayIndex < result.days.length; dayIndex += 1) {
+                                if (result.requestedCells?.[sourceKey]?.[dayIndex] || result.requestedCells?.[targetKey]?.[dayIndex]
+                                    || isDutyRosterLockedOff(result, targetKey, dayIndex)) continue;
+                                if (!getDutyRosterCellCodes(result.roster[sourceKey][dayIndex]).includes(code)) continue;
+                                const targetCodes = getDutyRosterCellCodes(result.roster[targetKey][dayIndex]);
+                                if (targetCodes.some((item) => !['X', 'ด', 'ช', 'บ', 'ชG', 'ชS', '6S'].includes(item))) continue;
+                                if (targetCodes.includes(code)) continue;
+                                const exchanges = targetCodes.filter((item) => ['ด', 'ช', 'บ', 'ชG', 'ชS', '6S'].includes(item));
+                                // A transfer or an exchange preserves daily staffing; exchanges also preserve total work.
+                                for (const exchange of [null, ...exchanges]) {
+                                    const sourceOriginal = result.roster[sourceKey][dayIndex];
+                                    const targetOriginal = result.roster[targetKey][dayIndex];
+                                    const sourceFloor = Math.min(result.stats[sourceKey].work, result.stats[sourceKey].minWorkTarget);
+                                    const targetFloor = Math.min(result.stats[targetKey].work, result.stats[targetKey].minWorkTarget);
+                                    removeDutyRosterCode(result, sourceKey, dayIndex, code);
+                                    if (exchange) removeDutyRosterCode(result, targetKey, dayIndex, exchange);
+                                    addDutyRosterCode(result, targetKey, dayIndex, code);
+                                    if (exchange) addDutyRosterCode(result, sourceKey, dayIndex, exchange);
+                                    recalculateDutyRosterStats(result);
+                                    const ok = result.stats[sourceKey].work >= sourceFloor && result.stats[targetKey].work >= targetFloor
+                                        && getDutyRosterShiftBalanceScore(result) < oldScore - 0.000001
+                                        && isDutyRosterDayRequirementsSatisfied(result, dayIndex)
+                                        && isDutyRosterUserSequenceValid(result, source) && isDutyRosterUserSequenceValid(result, target);
+                                    if (ok) {
+                                        improved = true;
+                                        break search;
+                                    }
+                                    result.roster[sourceKey][dayIndex] = sourceOriginal;
+                                    result.roster[targetKey][dayIndex] = targetOriginal;
+                                    recalculateDutyRosterStats(result);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         function rebalanceDutyRosterMinimumWork(result) {
@@ -5611,7 +5718,7 @@
         }
 
         function appendDutyRosterBalanceWarnings(result) {
-            // Report only daily staffing shortages, using the final roster after edits.
+            // Rebuild warnings from the final roster after generation or manual edits.
             result.warnings = [];
             result.days.forEach((dayInfo, dayIndex) => {
                 const requirements = getDutyRequirements(result.positionType, dayInfo);
@@ -5641,6 +5748,23 @@
                             result.warnings.push(`${formatDisplayDate(dayInfo.date)} เวร ${requirement.code}: ${[...new Set(problems)].join(' • ')}${hasPending ? ' (วันนี้มีคำขอ Pending ร่วมจัดเวร)' : ''}`);
                         }
                     });
+                appendDutyRosterMinimumWorkWarnings(result);
+            appendDutyRosterShiftBalanceWarnings(result);
+        });
+        }
+
+        function appendDutyRosterShiftBalanceWarnings(result) {
+            const levels = [...new Set(result.users.map((user) => normalizeLevelName(user.level)))];
+            levels.forEach((level) => {
+                ['ด', 'บ'].forEach((code) => {
+                    const members = result.users.filter((user) => !isDutySpecialAssignment(user)
+                        && normalizeLevelName(user.level) === level
+                        && (code !== 'ด' || !getDutyStaffRule(user).noNight));
+                    const counts = members.map((user) => result.stats[getUserIdentityKey(user)][code] || 0);
+                    if (counts.length && Math.max(...counts) - Math.min(...counts) > 1) {
+                        result.warnings.push(`เกลี่ยเวร: ${level} เวร ${code} อยู่ในช่วง ${Math.min(...counts)}–${Math.max(...counts)} เวร ยังเกลี่ยให้ต่างกันไม่เกิน 1 เวรไม่ได้ภายใต้ข้อจำกัดปัจจุบัน`);
+                    }
+                });
             });
         }
 
