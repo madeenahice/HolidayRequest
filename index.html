@@ -4314,9 +4314,9 @@
         function getDutyRosterSelectedUsers() {
             const department = getCanonicalDepartmentName(document.getElementById('duty-roster-department')?.value || '');
             const position = document.getElementById('duty-roster-position')?.value || '';
+            // Keep the master staff order, matching the monthly request summary and CSV export.
             return users
-                .filter((user) => (!department || getCanonicalDepartmentName(user.department) === department) && (!position || user.position === position))
-                .sort((a, b) => getLevelOrder(b.level) - getLevelOrder(a.level) || a.name.localeCompare(b.name, 'th'));
+                .filter((user) => (!department || getCanonicalDepartmentName(user.department) === department) && (!position || user.position === position));
         }
 
         function getDefaultDutyStaffing(positionType) {
@@ -5360,7 +5360,9 @@
                 stats[key] = { work: 0, off: 0, leave: leaveDays, weekdayLeave, minWorkTarget: Math.max(0, minWorkTarget - weekdayLeave), available: Math.max(1, days.length - leaveDays), ช: 0, บ: 0, ด: 0, ชG: 0, ชS: 0, '6S': 0 };
             });
 
-            days.forEach((dayInfo, dayIndex) => {
+            // Reserve specialty shifts across the month before assigning ER shifts.
+            // Otherwise early night/morning assignments can consume the specialty staff.
+            ['specialty', 'er'].forEach((phase) => days.forEach((dayInfo, dayIndex) => {
                 const requirements = getDutyRequirements(positionType, dayInfo);
                 const byAssignment = {
                     er: rosterUsers.filter((user) => ['er', 'refer', 'ems'].includes(getDutyStaffRule(user).assignment)),
@@ -5368,8 +5370,10 @@
                     screening: rosterUsers.filter((user) => getDutyStaffRule(user).assignment === 'screening')
                 };
                 getOrderedDutyRequirementBlocks(requirements, byAssignment)
-                    .forEach(({ requirement, pool, primaryPool }) => assignDutyBlock(roster, stats, warnings, pool, dayInfo, dayIndex, requirement, primaryPool));
-            });
+                    .filter(({ group }) => phase === 'specialty' ? group !== 'er' : group === 'er')
+                    .forEach(({ requirement, pool, primaryPool }) => assignDutyBlock(roster, stats, warnings, pool, dayInfo, dayIndex,
+                        phase === 'specialty' ? { ...requirement, preferPrimary: true } : requirement, primaryPool));
+            }));
 
             rosterUsers.forEach((user) => {
                 const key = getUserIdentityKey(user);
@@ -5578,6 +5582,12 @@
             const targetKey = getUserIdentityKey(targetUser);
             const sourceOriginal = result.roster[sourceKey][dayIndex];
             const targetOriginal = result.roster[targetKey][dayIndex];
+            const sourceAssignment = getDutyStaffRule(sourceUser).assignment;
+            const specialtyCode = sourceAssignment === 'screening' ? 'ชS' : sourceAssignment === 'procedure' ? 'ชG' : '';
+            if (code === specialtyCode) {
+                const specialtyCount = result.roster[sourceKey].filter((cell) => getDutyRosterCellCodes(cell).includes(code)).length;
+                if (specialtyCount <= (result.stats[sourceKey]?.minWorkTarget || 0)) return false;
+            }
             if (result.requestedCells?.[sourceKey]?.[dayIndex] || result.requestedCells?.[targetKey]?.[dayIndex]) return false;
             if (isDutyRosterLockedOff(result, targetKey, dayIndex)) return false;
             removeDutyRosterCode(result, sourceKey, dayIndex, code);
@@ -5813,6 +5823,11 @@
                 const target = stat.minWorkTarget ?? Math.max(0, baseTarget - (stat.weekdayLeave || 0));
                 if ((stat.work || 0) < target) {
                     result.warnings.push(`${warningPrefix} ${user.name} ขึ้นเวร ${stat.work || 0}/${target} เวร ต่ำกว่าวันทำการของเดือน${stat.weekdayLeave ? ` (หักวันลาวันธรรมดา ${stat.weekdayLeave} วันแล้ว)` : ''}`);
+                }
+                const assignment = getDutyStaffRule(user).assignment;
+                const specialtyCode = assignment === 'screening' ? 'ชS' : assignment === 'procedure' ? 'ชG' : '';
+                if (specialtyCode && (stat[specialtyCode] || 0) < target) {
+                    result.warnings.push(`${warningPrefix} ${user.name} เวรประจำจุด ${specialtyCode} ${stat[specialtyCode] || 0}/${target} เวร ยังไม่ครบวันทำการ เนื่องจากอัตรากำลัง วันลา หรือข้อจำกัดการจัดเวร`);
                 }
             });
         }
