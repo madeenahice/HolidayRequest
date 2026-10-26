@@ -4354,6 +4354,7 @@
             }
             return {
                 erMorning: 7,
+                erMorningHoliday: 8,
                 erAfternoon: 10,
                 erNight: 6,
                 procedureWeekday: 3,
@@ -4523,6 +4524,7 @@
             }
             return [
                 ...common,
+                ['erMorningHoliday', 'ER เวรเช้า วันหยุด/เสาร์-อาทิตย์ (ช)'],
                 ['screeningWeekday', 'คัดกรอง ชS วันจันทร์-ศุกร์'],
                 ['screeningWeekend', 'คัดกรอง ชS เสาร์-อาทิตย์']
             ];
@@ -4976,14 +4978,26 @@
             }
             return {
                 er: [
-                    applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), levelMin: { 5: 2, 4: 1, 3: 1 } }),
-                    applyDutyMainLevelOverride(positionType, 'erMorning', { code: 'ช', count: staffing('erMorning'), levelMin: dayInfo.isHoliday ? { 5: 3, 4: 1, 3: 1 } : { 5: 2, 4: 1, 3: 1 }, levelMax: dayInfo.isHoliday ? { 5: 3, 4: 2 } : { 5: 3, 4: 2 }, levelGroupMin: { levels: [3, 4, 5], min: 5 } }),
-                    applyDutyMainLevelOverride(positionType, 'erAfternoon', { code: 'บ', count: staffing('erAfternoon'), levelMin: dayInfo.isHoliday ? { 5: 3, 4: 1, 3: 1 } : { 5: 2, 4: 1, 3: 1 }, levelMax: dayInfo.isHoliday ? { 5: 3, 4: 2 } : { 5: 3, 4: 2 }, levelGroupMin: { levels: [3, 4, 5], min: 5 } })
+                    applyDutyMainLevelOverride(positionType, 'erNight', { code: 'ด', count: staffing('erNight'), levelMin: { 5: 2, 4: 1, 3: 1 }, levelMax: { 5: 2, 4: 1, 3: 1 } }),
+                    applyDutyMainLevelOverride(positionType, dayInfo.isHoliday ? 'erMorningHoliday' : 'erMorning', {
+                        code: 'ช',
+                        count: staffing(dayInfo.isHoliday ? 'erMorningHoliday' : 'erMorning'),
+                        levelMin: dayInfo.isHoliday ? { 5: 3, 4: 1, 3: 1 } : { 5: 2, 4: 1, 3: 1 },
+                        levelMax: dayInfo.isHoliday ? { 5: 3, 4: 2, 3: 1 } : { 5: 3, 4: 2, 3: 1 },
+                        levelGroupMin: { levels: [3, 4, 5], min: 5 }
+                    }),
+                    applyDutyMainLevelOverride(positionType, 'erAfternoon', {
+                        code: 'บ',
+                        count: staffing('erAfternoon'),
+                        levelMin: { 5: 3, 4: 1, 3: 1 },
+                        levelMax: { 5: 3, 4: 2, 3: 1 },
+                        levelGroupMin: { levels: [3, 4, 5], min: 5 }
+                    })
                 ],
-                procedure: [applyDutyMainLevelOverride(positionType, dayInfo.isHoliday ? 'procedureHoliday' : 'procedureWeekday', { code: 'ชG', count: dayInfo.isHoliday ? staffing('procedureHoliday') : staffing('procedureWeekday'), levelMin: { min3: 1 }, preferPrimaryWeekdays: true })],
+                procedure: [applyDutyMainLevelOverride(positionType, dayInfo.isHoliday ? 'procedureHoliday' : 'procedureWeekday', { code: 'ชG', count: dayInfo.isHoliday ? staffing('procedureHoliday') : staffing('procedureWeekday'), levelMin: { min3: 1 }, preferPrimary: true })],
                 screening: dayInfo.isWeekend
-                    ? [applyDutyMainLevelOverride(positionType, 'screeningWeekend', { code: 'ชS', count: staffing('screeningWeekend'), requiredMinLevel: 3, preferPrimaryWeekdays: true })]
-                    : [applyDutyMainLevelOverride(positionType, 'screeningWeekday', { code: 'ชS', count: staffing('screeningWeekday'), requiredMinLevel: 3, preferPrimaryWeekdays: true })]
+                    ? [applyDutyMainLevelOverride(positionType, 'screeningWeekend', { code: 'ชS', count: staffing('screeningWeekend'), requiredMinLevel: 3, preferPrimary: true })]
+                    : [applyDutyMainLevelOverride(positionType, 'screeningWeekday', { code: 'ชS', count: staffing('screeningWeekday'), requiredMinLevel: 3, preferPrimary: true })]
             };
         }
 
@@ -5076,8 +5090,9 @@
             const getPickedLevelCount = (levelText) => picked.filter((user) => getLevelOrder(user.level) === Number(levelText)).length;
             const isWithinLevelMax = (user) => {
                 const level = getLevelOrder(user.level);
-                const max = Number(levelMax[String(level)] || 0);
-                return !max || getPickedLevelCount(String(level)) < max;
+                const levelText = String(level);
+                if (!Object.prototype.hasOwnProperty.call(levelMax, levelText)) return true;
+                return getPickedLevelCount(levelText) < Math.max(0, Number(levelMax[levelText] || 0));
             };
             const getLoadRatio = (user, field) => {
                 const userStats = stats[getUserIdentityKey(user)] || {};
@@ -5093,6 +5108,7 @@
                 const candidate = eligiblePool
                     .filter((user) => !picked.some((item) => getUserIdentityKey(item) === getUserIdentityKey(user)))
                     .filter((user) => predicate(user))
+                    .filter(isWithinLevelMax)
                     .filter((user) => !groupMax || !groupMax.levels.includes(getLevelOrder(user.level))
                         || picked.filter((item) => groupMax.levels.includes(getLevelOrder(item.level))).length < groupMax.max)
                     .filter((user) => canAssignDuty(roster, user, dayIndex, code))
@@ -5199,9 +5215,18 @@
             return remaining;
         }
 
+        function getRemainingLevelMax(levelMax, picked) {
+            const remaining = {};
+            Object.entries(levelMax || {}).forEach(([levelText, maxCount]) => {
+                const pickedCount = picked.filter((user) => getLevelOrder(user.level) === Number(levelText)).length;
+                remaining[levelText] = Math.max(0, Number(maxCount || 0) - pickedCount);
+            });
+            return remaining;
+        }
+
         function assignDutyBlock(roster, stats, warnings, pool, dayInfo, dayIndex, requirement, primaryPool = []) {
             let picked = [];
-            if (requirement.preferPrimaryWeekdays && isDutyWeekday(dayInfo) && primaryPool.length) {
+            if ((requirement.preferPrimary || (requirement.preferPrimaryWeekdays && isDutyWeekday(dayInfo))) && primaryPool.length) {
                 picked = pickDutyCandidates(roster, stats, primaryPool, dayIndex, requirement.code, requirement.count, requirement.levelMin || {}, requirement.requiredMinLevel || 0, requirement.levelGroup || null, requirement.levelMax || {}, requirement.levelGroupMin || null, requirement.levelGroupMax || null, Boolean(requirement.mixLevels));
                 assignPickedDutyUsers(roster, stats, dayIndex, requirement, picked);
             }
@@ -5209,11 +5234,12 @@
                 const pickedKeys = new Set(picked.map(getUserIdentityKey));
                 const remainingPool = pool.filter((user) => !pickedKeys.has(getUserIdentityKey(user)));
                 const remainingLevelMin = getRemainingLevelMin(requirement.levelMin || {}, picked);
+                const remainingLevelMax = getRemainingLevelMax(requirement.levelMax || {}, picked);
                 const remainingCoreQuota = requirement.levelGroupMin ? {
                     ...requirement.levelGroupMin,
                     min: Math.max(0, requirement.levelGroupMin.min - picked.filter((user) => requirement.levelGroupMin.levels.includes(getLevelOrder(user.level))).length)
                 } : null;
-                const fallbackPicked = pickDutyCandidates(roster, stats, remainingPool, dayIndex, requirement.code, requirement.count - picked.length, remainingLevelMin, requirement.requiredMinLevel || 0, requirement.levelGroup || null, requirement.levelMax || {}, remainingCoreQuota, requirement.levelGroupMax || null, Boolean(requirement.mixLevels));
+                const fallbackPicked = pickDutyCandidates(roster, stats, remainingPool, dayIndex, requirement.code, requirement.count - picked.length, remainingLevelMin, requirement.requiredMinLevel || 0, requirement.levelGroup || null, remainingLevelMax, remainingCoreQuota, requirement.levelGroupMax || null, Boolean(requirement.mixLevels));
                 assignPickedDutyUsers(roster, stats, dayIndex, requirement, fallbackPicked);
                 picked = [...picked, ...fallbackPicked];
             }
