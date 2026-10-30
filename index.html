@@ -2651,22 +2651,32 @@
         }
 
         function getMaxConsecutiveRequestDays(targetUser, additionalDates, excludedRequestId = null) {
+            const activeRequestStatus = new Set(['Approved', 'Pending']);
+            const proposedDates = new Set(additionalDates);
+            if (!proposedDates.size) return 0;
             const allDates = [
                 ...shiftRequests
-                    .filter((request) => (
-                        (typeof targetUser === 'object'
+                    .filter((request) => {
+                        const sameUser = (typeof targetUser === 'object'
                             ? isSameRequestUser(request, targetUser)
-                            : isSameUserId(request.userId, targetUser))
-                        && request.id !== excludedRequestId
-                    ))
+                            : isSameUserId(request.userId, targetUser));
+                        const notExcluded = request.id !== excludedRequestId;
+                        const activeStatus = activeRequestStatus.has(String(request.status || ''));
+                        const notCancelled = !['Cancelled', 'Canceled', 'Rejected', 'Deleted', 'cancle'].includes(String(request.status || ''));
+                        const countsTowardLimit = request.leaveType !== 'ยกเลิก'
+                            && !canRequestMoreThanNineDays(request.leaveType);
+                        return sameUser && notExcluded && activeStatus && notCancelled && countsTowardLimit;
+                    })
                     .flatMap((request) => getRequestDates(request)),
                 ...additionalDates
             ];
             const uniqueDates = [...new Set(allDates)].sort();
             if (!uniqueDates.length) return 0;
 
-            let maxStreak = 1;
+            let maxStreak = 0;
             let currentStreak = 1;
+            let includesProposedDate = proposedDates.has(uniqueDates[0]);
+            if (includesProposedDate) maxStreak = 1;
             for (let i = 1; i < uniqueDates.length; i += 1) {
                 const previousDate = uniqueDates[i - 1];
                 const currentDateValue = uniqueDates[i];
@@ -2674,8 +2684,10 @@
                     currentStreak += 1;
                 } else {
                     currentStreak = 1;
+                    includesProposedDate = false;
                 }
-                maxStreak = Math.max(maxStreak, currentStreak);
+                includesProposedDate = includesProposedDate || proposedDates.has(currentDateValue);
+                if (includesProposedDate) maxStreak = Math.max(maxStreak, currentStreak);
             }
             return maxStreak;
         }
