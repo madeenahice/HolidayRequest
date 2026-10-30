@@ -336,6 +336,10 @@
                         <label class="block text-sm font-medium text-gray-600 mb-1">เวรที่ขอ</label>
                         <select id="form-leave-type" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none"></select>
                     </div>
+                    <div id="form-request-note-section" class="hidden">
+                        <label id="form-request-note-label" for="form-request-note" class="block text-sm font-medium text-gray-600 mb-1">หมายเหตุ</label>
+                        <textarea id="form-request-note" rows="3" disabled class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none"></textarea>
+                    </div>
                     <button type="submit" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-xl shadow-md shadow-teal-100 transition">
                         ส่งคำขอเวร
                     </button>
@@ -1186,6 +1190,20 @@
             showFirstAllowedUserMonth();
             setDefaultRequestDates();
             applyDateLimits();
+            updateRequestNoteField();
+        }
+
+        function updateRequestNoteField() {
+            const leaveType = document.getElementById('form-leave-type').value;
+            const needsNote = ['ลากิจ', 'อบรม', 'ลาป่วย', 'ยกเลิก'].includes(leaveType);
+            const note = document.getElementById('form-request-note');
+            const label = leaveType === 'ยกเลิก' ? 'เหตุผลการยกเลิก'
+                : leaveType === 'อบรม' ? 'อบรมอะไร' : `หมายเหตุ${leaveType}`;
+            document.getElementById('form-request-note-section').classList.toggle('hidden', !needsNote);
+            document.getElementById('form-request-note-label').innerText = label;
+            note.placeholder = `ระบุ${label}`;
+            note.required = needsNote;
+            note.disabled = !needsNote;
         }
 
         function setRole(nextRole) {
@@ -1395,6 +1413,8 @@
                 renderCalendar();
             });
             document.getElementById('form-leave-type').addEventListener('change', () => {
+                document.getElementById('form-request-note').value = '';
+                updateRequestNoteField();
                 applyDateLimits();
                 updateRequestDateDisplays();
             });
@@ -2851,7 +2871,7 @@
                     return;
                 }
 
-                const cancelReason = prompt('ระบุเหตุผลการยกเลิก');
+                const cancelReason = document.getElementById('form-request-note').value;
                 if (!cancelReason || !cancelReason.trim()) {
                     alert('กรุณาระบุเหตุผลการยกเลิก');
                     return;
@@ -2905,10 +2925,7 @@
                     return;
                 }
 
-                const notePrompt = leaveType === 'อบรม'
-                    ? 'อบรมอะไร'
-                    : `ระบุหมายเหตุ${leaveType}`;
-                trainingNote = prompt(notePrompt);
+                trainingNote = document.getElementById('form-request-note').value;
                 if (!trainingNote || !trainingNote.trim()) {
                     alert(leaveType === 'อบรม' ? 'กรุณาระบุหมายเหตุว่าอบรมอะไร' : `กรุณาระบุหมายเหตุ${leaveType}`);
                     return;
