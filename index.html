@@ -591,14 +591,14 @@
                             <select id="admin-add-user-position" class="p-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500"></select>
                             <select id="admin-add-user-level" class="p-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500"></select>
                         </div>
-                        <button onclick="addAdminUser().catch(handleAsyncActionError)" class="mt-2 bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">เพิ่มรายชื่อ</button>
+                        <button type="button" data-staff-add onclick="addAdminUser().catch(handleAsyncActionError)" class="mt-2 bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">เพิ่มรายชื่อ</button>
                     </div>
 
                     <div id="admin-add-department-panel" class="hidden">
                         <h4 class="font-bold text-amber-800 mb-2">เพิ่มหน่วยงาน</h4>
                         <div class="flex gap-2">
                             <input id="admin-add-department" placeholder="ชื่อหน่วยงาน" class="min-w-0 flex-1 p-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500">
-                            <button onclick="addDepartment()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 rounded-lg text-xs font-semibold">เพิ่ม</button>
+                            <button type="button" data-staff-add onclick="addStaffGroup('department')" class="bg-amber-600 hover:bg-amber-700 text-white px-3 rounded-lg text-xs font-semibold">เพิ่ม</button>
                         </div>
                     </div>
 
@@ -606,7 +606,7 @@
                         <h4 class="font-bold text-amber-800 mb-2">เพิ่มตำแหน่ง</h4>
                         <div class="flex gap-2">
                             <input id="admin-add-position" placeholder="ชื่อตำแหน่ง" class="min-w-0 flex-1 p-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500">
-                            <button onclick="addPosition()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 rounded-lg text-xs font-semibold">เพิ่ม</button>
+                            <button type="button" data-staff-add onclick="addStaffGroup('position')" class="bg-amber-600 hover:bg-amber-700 text-white px-3 rounded-lg text-xs font-semibold">เพิ่ม</button>
                         </div>
                     </div>
 
@@ -614,7 +614,7 @@
                         <h4 class="font-bold text-amber-800 mb-2">เพิ่ม Level</h4>
                         <div class="flex gap-2">
                             <input id="admin-add-level" placeholder="ชื่อ Level" class="min-w-0 flex-1 p-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500">
-                            <button onclick="addLevel()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 rounded-lg text-xs font-semibold">เพิ่ม</button>
+                            <button type="button" data-staff-add onclick="addStaffGroup('level')" class="bg-amber-600 hover:bg-amber-700 text-white px-3 rounded-lg text-xs font-semibold">เพิ่ม</button>
                         </div>
                     </div>
                 </div>
@@ -865,6 +865,8 @@
         let lastRealtimeConnected = false;
         let lastRealtimeCount = 0;
         let realtimeLoadInFlight = false;
+        let staffChangeInFlight = false;
+        let staffDataRevision = 0;
         let isInitialDataLoading = false;
         let transientStatusUntil = 0;
         const REALTIME_POLL_MIN_MS = 6000;
@@ -1508,6 +1510,12 @@
             });
             document.getElementById('admin-add-type').addEventListener('change', renderAdminAddPanel);
             document.getElementById('admin-position-filter').addEventListener('change', renderAdminTable);
+            const staffTable = document.getElementById('admin-user-table');
+            staffTable.addEventListener('change', handleStaffTableAction);
+            staffTable.addEventListener('click', handleStaffTableAction);
+            const staffList = document.getElementById('admin-selected-list');
+            staffList.addEventListener('change', handleStaffGroupAction);
+            staffList.addEventListener('click', handleStaffGroupAction);
             document.getElementById('admin-early-close-month-select').addEventListener('change', getEarlyCloseMonthFromControls);
             document.getElementById('admin-early-close-year').addEventListener('input', getEarlyCloseMonthFromControls);
             document.getElementById('btn-form-start-date').addEventListener('click', () => {
@@ -1775,8 +1783,8 @@
         }
 
         function refreshMasterLists(extra = {}) {
-            const nextDepartments = [...new Set([...(extra.departments || departments), 'หน่วยบริการทางการแพทย์ฉุกเฉิน', 'รับ-ส่งต่อ', ...users.map((user) => user.department)].map(getCanonicalDepartmentName).filter(Boolean))];
-            const nextPositions = [...new Set([...(extra.positions || positions), 'พนักงานทั่วไป', ...users.map((user) => user.position)].filter(Boolean))];
+            const nextDepartments = [...new Set([...(extra.departments || departments), ...users.map((user) => user.department)].map(getCanonicalDepartmentName).filter(Boolean))];
+            const nextPositions = [...new Set([...(extra.positions || positions), ...users.map((user) => user.position)].filter(Boolean))];
             const nextLevels = [...new Set([...(extra.levels || levels), ...users.map((user) => user.level)].filter(Boolean))];
 
             departments.splice(0, departments.length, ...nextDepartments);
@@ -1803,12 +1811,7 @@
                 return false;
             }
 
-            users = normalizeUsers(response.staff.users || []);
-            refreshMasterLists({
-                departments: response.staff.departments || [],
-                positions: response.staff.positions || [],
-                levels: response.staff.levels || []
-            });
+            applyStaffData(response.staff);
 
             if (response.holidays && response.holidays.ok && response.holidays.holidays) {
                 applyPublicHolidays(response.holidays.holidays);
@@ -1834,11 +1837,15 @@
                 return;
             }
 
-            users = normalizeUsers(response.users || []);
+            applyStaffData(response);
+        }
+
+        function applyStaffData(staff) {
+            users = normalizeUsers(staff.users || []);
             refreshMasterLists({
-                departments: response.departments || [],
-                positions: response.positions || [],
-                levels: response.levels || []
+                departments: staff.departments || [],
+                positions: staff.positions || [],
+                levels: staff.levels || []
             });
         }
 
@@ -1969,42 +1976,6 @@
             return true;
         }
 
-        function getStaffSavePayload() {
-            return users.map((user) => ({
-                id: user.id,
-                name: user.name,
-                department: user.department,
-                position: user.position,
-                level: user.level
-            }));
-        }
-
-        async function saveStaffToSheet() {
-            const staffPayload = getStaffSavePayload();
-            const response = await requestAppsScriptJsonpWithRetry('saveStaff', {
-                actorUserId: currentRole === 'admin' ? currentAdminUserId : '',
-                adminSessionToken: currentRole === 'admin' ? currentAdminSessionToken : '',
-                users: JSON.stringify(staffPayload)
-            }, {
-                timeoutMs: JSONP_LIGHT_READ_TIMEOUT_MS,
-                retries: 0
-            });
-
-            if (response && response.ok) return response;
-
-            const fallbackSaved = await postAppsScriptNoCors({
-                action: 'SAVE_STAFF',
-                actorUserId: currentRole === 'admin' ? currentAdminUserId : '',
-                adminSessionToken: currentRole === 'admin' ? currentAdminSessionToken : '',
-                detail: { users: staffPayload }
-            });
-            if (!fallbackSaved) {
-                throw new Error(response?.message || 'บันทึกรายชื่อเจ้าหน้าที่ลง Google Sheet ไม่สำเร็จ');
-            }
-            showTransientStatus('บันทึกรายชื่อแล้ว กำลังรอ sync จาก Google Sheet', 'bg-amber-500 text-white', 6000);
-            return { ok: true, fallback: true };
-        }
-
         function findUserByRequestRecord(record) {
             const idMatches = users.filter((user) => isSameUserId(user.id, record.userId));
             const recordName = normalizeName(record.name);
@@ -2072,6 +2043,10 @@
             return JSON.stringify(requests.map((request) => [
                 request.id,
                 request.userId,
+                request.name,
+                request.department,
+                request.position,
+                request.level,
                 request.startDate,
                 request.endDate,
                 request.status,
@@ -2082,12 +2057,14 @@
         }
 
         async function loadShiftRequestsFromSheet({ silent = true } = {}) {
-            if (realtimeLoadInFlight) return true;
+            if (realtimeLoadInFlight || staffChangeInFlight) return true;
             realtimeLoadInFlight = true;
+            const staffRevision = staffDataRevision;
             try {
                 const response = await requestAppsScriptJsonpWithRetry('getRequests', {}, {
                     timeoutMs: JSONP_REQUEST_READ_TIMEOUT_MS
                 });
+                if (staffChangeInFlight || staffRevision !== staffDataRevision) return false;
                 if (!response || !response.ok) {
                     updateRealtimeStatus(false);
                     if (!silent) alert(response?.message || 'โหลดข้อมูลคำขอเวรจาก Google Sheet ไม่สำเร็จ');
@@ -2527,72 +2504,9 @@
             }));
         }
 
-        function getNextMonthStartDate(date = requestToday) {
-            return formatDateInput(new Date(date.getFullYear(), date.getMonth() + 1, 1));
-        }
-
-        function getCurrentMonthStartDate(date = requestToday) {
-            return formatDateInput(new Date(date.getFullYear(), date.getMonth(), 1));
-        }
-
         function getFirstAllowedMonthStartDate() {
             const firstAllowedDate = getFirstAllowedUserDate();
             return formatDateInput(new Date(firstAllowedDate.getFullYear(), firstAllowedDate.getMonth(), 1));
-        }
-
-        function getCreateActionForRequest(request) {
-            return request.status === 'Approved' ? 'CREATE_APPROVED_REQUEST' : 'CREATE_PENDING_REQUEST';
-        }
-
-        function getLevelChangeWritesForFutureRequests(user, oldLevel, newLevel, effectiveDate) {
-            const writes = [];
-            shiftRequests
-                .filter((request) => isSameRequestUser(request, user) && request.level === oldLevel)
-                .forEach((request) => {
-                    const requestDates = getRequestDates(request).slice().sort();
-                    const futureDates = requestDates.filter((date) => date >= effectiveDate);
-                    if (!futureDates.length) return;
-
-                    const historicalDates = requestDates.filter((date) => date < effectiveDate);
-                    if (!historicalDates.length) {
-                        request.level = newLevel;
-                        writes.push({
-                            action: 'EDIT_REQUEST_DATES',
-                            detail: getRequestLogDetail(request)
-                        });
-                        return;
-                    }
-
-                    const historicalRanges = groupConsecutiveDateRanges(historicalDates);
-                    const futureRanges = groupConsecutiveDateRanges(futureDates);
-                    const firstHistoricalRange = historicalRanges[0];
-                    request.startDate = firstHistoricalRange.startDate;
-                    request.endDate = firstHistoricalRange.endDate;
-                    request.dates = firstHistoricalRange.dates;
-                    request.level = oldLevel;
-                    delete request.date;
-                    writes.push({
-                        action: 'EDIT_REQUEST_DATES',
-                        detail: getRequestLogDetail(request)
-                    });
-
-                    futureRanges.forEach((range) => {
-                        const splitRequest = {
-                            ...request,
-                            id: createUniqueRequestId(),
-                            startDate: range.startDate,
-                            endDate: range.endDate,
-                            dates: range.dates,
-                            level: newLevel
-                        };
-                        shiftRequests.push(splitRequest);
-                        writes.push({
-                            action: getCreateActionForRequest(splitRequest),
-                            detail: getRequestLogDetail(splitRequest)
-                        });
-                    });
-                });
-            return writes;
         }
 
         function isWeekend(dateStr) {
@@ -3260,346 +3174,145 @@
             renderAdminReserveQueue();
         }
 
-        window.changeUserName = function(userId, userName, newName) {
-            const user = findUserById(userId, userName);
-            if (user) {
-                const oldName = user.name;
-                shiftRequests.forEach((request) => {
-                    if (isSameRequestUser(request, user)) request.name = newName;
-                });
-                user.name = newName;
+        function setStaffEditingDisabled(disabled) {
+            document.querySelectorAll('#admin-user-table input, #admin-user-table select, #admin-user-table button, #admin-selected-list input, #admin-selected-list button, [data-staff-add]').forEach((control) => {
+                control.disabled = disabled;
+            });
+        }
+
+        async function saveStaffChange(change) {
+            if (currentRole !== 'admin' || staffChangeInFlight) return false;
+            staffChangeInFlight = true;
+            staffDataRevision += 1;
+            setStaffEditingDisabled(true);
+            showTransientStatus('กำลังบันทึกข้อมูลเจ้าหน้าที่...', 'bg-amber-500 text-white', 60000);
+            try {
+                const response = await requestAppsScriptJsonp('manageStaff', {
+                    actorUserId: currentAdminUserId,
+                    adminSessionToken: currentAdminSessionToken,
+                    change: JSON.stringify(change)
+                }, JSONP_REQUEST_READ_TIMEOUT_MS);
+                if (!response?.ok || !response.staff) {
+                    const message = response?.timedOut || response?.networkError
+                        ? 'ไม่ได้รับผลยืนยันจาก Google Sheet กรุณารีเฟรชเพื่อตรวจสอบก่อนทำรายการซ้ำ'
+                        : response?.message || 'บันทึกข้อมูลเจ้าหน้าที่ไม่สำเร็จ';
+                    throw new Error(message);
+                }
+
+                applyStaffData(response.staff);
+                const changedIds = new Set((response.requests || []).map((request) => String(request.id)));
+                shiftRequests = [
+                    ...shiftRequests.filter((request) => !changedIds.has(String(request.id))),
+                    ...normalizeShiftRequests(response.requests || [])
+                ].sort(compareRequestsByLevelThenTime);
+                lastRealtimeSignature = getRealtimeSignature(shiftRequests);
+                dutyRosterState.generated = null;
+                const requestText = response.requestCount ? ` · อัปเดตคำขอ ${response.requestCount} รายการ` : '';
+                showTransientStatus(`บันทึกข้อมูลเจ้าหน้าที่แล้ว${requestText}`, 'bg-emerald-600 text-white');
+                scheduleRealtimeRefresh(1200);
+                return true;
+            } catch (error) {
+                showTransientStatus(error.message, 'bg-red-600 text-white', 8000);
+                return false;
+            } finally {
+                staffChangeInFlight = false;
+                setStaffEditingDisabled(false);
                 refreshAdminViews();
-                saveStaffToSheet();
-            }
-        };
-
-        async function changeUserLevelEffective(userId, userName, newLevel, effectiveDate, scopeLabel) {
-            const user = findUserById(userId, userName);
-            if (user) {
-                const oldLevel = user.level;
-                if (oldLevel === newLevel) return;
-
-                const confirmText = `เปลี่ยน Level ของ ${user.name} จาก ${oldLevel} เป็น ${newLevel}\n\nการเปลี่ยนนี้จะมีผลตั้งแต่ ${formatDisplayDate(effectiveDate)} เป็นต้นไปเท่านั้น\nข้อมูลย้อนหลังและเดือนปัจจุบันจะคง Level เดิมไว้\n\nยืนยันหรือไม่?`;
-                const currentMonthText = effectiveDate === getCurrentMonthStartDate()
-                    ? `เปลี่ยน Level ของ ${user.name} จาก ${oldLevel} เป็น ${newLevel}\n\nการเปลี่ยนนี้จะอัปเดตคำขอเวรตั้งแต่ ${formatDisplayDate(effectiveDate)} รวมเดือนปัจจุบันเป็นต้นไป\nข้อมูลก่อนเดือนปัจจุบันจะคง Level เดิมไว้\n\nยืนยันหรือไม่?`
-                    : confirmText;
-                if (!confirm(currentMonthText)) {
-                    refreshAdminViews();
-                    return;
-                }
-
-                const beforeRequests = cloneShiftRequestsSnapshot();
-                user.level = newLevel;
-                if (!levels.includes(newLevel)) levels.push(newLevel);
-                const writes = getLevelChangeWritesForFutureRequests(user, oldLevel, newLevel, effectiveDate);
-
-                for (const item of writes) {
-                    const saved = await logAction(item.action, item.detail, {
-                        refresh: false,
-                        successText: 'ปรับเลเวลสำเร็จ',
-                        failureText: 'ปรับเลเวลไม่สำเร็จ'
-                    });
-                    if (!saved) {
-                        user.level = oldLevel;
-                        shiftRequests = beforeRequests;
-                        refreshAdminViews();
-                        alert('ปรับเลเวลลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
-                        return;
-                    }
-                }
-
-                refreshAdminViews();
-                try {
-                    const saved = await saveStaffToSheet();
-                    scheduleRealtimeRefresh(saved?.fallback ? 5000 : 1200);
-                    alert('ปรับเลเวลสำเร็จ');
-                } catch (error) {
-                    user.level = oldLevel;
-                    shiftRequests = beforeRequests;
-                    refreshAdminViews();
-                    alert(error?.message || 'ปรับเลเวลเจ้าหน้าที่ลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
-                    throw error;
-                }
             }
         }
 
-        window.changeUserLevel = async function(userId, userName, newLevel) {
-            await changeUserLevelEffective(userId, userName, newLevel, getFirstAllowedMonthStartDate(), 'เดือนที่ยังมีสิทธิ์ขอเวร');
-        };
+        function confirmStaffLevelChange(label, value, effectiveDate) {
+            return confirm(`เปลี่ยน Level ของ ${label} เป็น ${value}\n\nอัปเดตคำขอเวรที่ยื่นไว้ตั้งแต่ ${formatDisplayDate(effectiveDate)} (เดือนแรกที่เปิดรับคำขอ) เป็นต้นไป\n\nยืนยันหรือไม่?`);
+        }
 
-        window.changeUserLevelCurrentMonth = async function(userId, userName, newLevel) {
-            await changeUserLevelEffective(userId, userName, newLevel, getCurrentMonthStartDate(), 'อัปเดตเดือนปัจจุบัน');
-        };
+        function handleStaffTableAction(event) {
+            const control = event.target.closest('[data-staff-action]');
+            if (!control || control.dataset.event !== event.type || staffChangeInFlight) return;
+            const row = control.closest('[data-staff]');
+            const { id, name } = parseUserSelectValue(row.dataset.staff);
+            const user = users.find((item) => item.id === id && item.name === name);
+            if (!user) return;
 
-        window.changeUserPosition = function(userId, userName, newPosition) {
-            const user = findUserById(userId, userName);
-            if (user) {
-                const oldPosition = user.position;
-                user.position = newPosition;
-                shiftRequests.forEach((request) => {
-                    if (isSameRequestUser(request, user)) request.position = newPosition;
-                });
-                if (!positions.includes(newPosition)) positions.push(newPosition);
-                refreshAdminViews();
-                saveStaffToSheet();
+            const field = control.dataset.staffAction;
+            if (field === 'delete') {
+                if (confirm(`ยืนยันลบรายชื่อ ${user.name} และยกเลิกคำขอเวรทั้งหมดของเจ้าหน้าที่รายนี้หรือไม่?`)) {
+                    void saveStaffChange({ action: 'deleteStaff', userId: id, userName: name });
+                }
+                return;
             }
-        };
 
-        window.changeUserDepartment = function(userId, userName, newDepartment) {
-            const user = findUserById(userId, userName);
-            if (user) {
-                const oldDepartment = user.department;
-                user.department = newDepartment;
-                shiftRequests.forEach((request) => {
-                    if (isSameRequestUser(request, user)) request.department = newDepartment;
-                });
-                if (!departments.includes(newDepartment)) departments.push(newDepartment);
-                refreshAdminViews();
-                saveStaffToSheet();
+            const input = field === 'level' ? row.querySelector('[data-staff-level]') : control;
+            const value = input.value.trim();
+            if (!value || value === user[field]) {
+                input.value = user[field];
+                return;
             }
-        };
+            const effectiveDate = field === 'level' ? getFirstAllowedMonthStartDate() : '';
+            if (effectiveDate && !confirmStaffLevelChange(user.name, value, effectiveDate)) {
+                input.value = user.level;
+                return;
+            }
+            void saveStaffChange({
+                action: 'updateStaff', userId: id, userName: name, field,
+                oldValue: user[field], value, effectiveDate
+            });
+        }
 
         function refreshAdminViews() {
-            refreshMasterLists();
-            renderPositionDropdowns();
-            renderUserDropdowns();
-            renderAdminTable();
-            renderAdminSettings();
+            refreshViewsAfterDataLoad();
             renderLevelLegend();
-            renderCalendar();
-            renderAdminReserveQueue();
-            renderDutyRosterControls();
+            if (!document.getElementById('admin-cancel-view').classList.contains('hidden')) renderAdminCancelQueue();
+            if (!document.getElementById('admin-heatmap-view').classList.contains('hidden')) renderAdminHeatmap(false);
         }
 
         window.addAdminUser = async function() {
             const nameInput = document.getElementById('admin-add-user-name');
-            const name = nameInput.value.trim();
-            const department = document.getElementById('admin-add-user-department').value;
-            const position = document.getElementById('admin-add-user-position').value;
-            const level = document.getElementById('admin-add-user-level').value;
-            if (!name || !department || !position || !level) {
+            const user = {
+                name: nameInput.value.trim(),
+                department: document.getElementById('admin-add-user-department').value,
+                position: document.getElementById('admin-add-user-position').value,
+                level: document.getElementById('admin-add-user-level').value
+            };
+            if (!Object.values(user).every(Boolean)) {
                 alert('กรุณากรอกข้อมูลเจ้าหน้าที่ให้ครบ');
                 return;
             }
-
-            const beforeUsers = users.slice();
-            const nextUser = {
-                id: String(Math.max(0, ...users.map((user) => Number(user.id) || 0)) + 1),
-                name,
-                department,
-                position,
-                level
-            };
-            users.push(nextUser);
-            nameInput.value = '';
-            refreshAdminViews();
-            try {
-                const saved = await saveStaffToSheet();
-                showTransientStatus(`เพิ่มรายชื่อ ${nextUser.name} แล้ว`, 'bg-emerald-600 text-white');
-                scheduleRealtimeRefresh(saved?.fallback ? 5000 : 1200);
-            } catch (error) {
-                users = beforeUsers;
-                refreshAdminViews();
-                alert(error?.message || 'เพิ่มเจ้าหน้าที่ไม่สำเร็จ กรุณาลองใหม่');
-                throw error;
-            }
-        };
-
-        window.deleteUser = async function(userId, userName = '') {
-            const user = findUserById(userId, userName);
-            if (!user) return;
-            if (!confirm(`ยืนยันลบรายชื่อ ${user.name} หรือไม่?`)) return;
-            const beforeUsers = users.slice();
-            const beforeRequests = cloneShiftRequestsSnapshot();
-            const deletedRequests = shiftRequests.filter((request) => isSameRequestUser(request, user));
-            users = users.filter((item) => item !== user);
-            shiftRequests = shiftRequests.filter((request) => !deletedRequests.includes(request));
-            refreshAdminViews();
-            try {
-                for (const request of deletedRequests) {
-                    const requestDeleted = await logAction('DELETE_REQUEST', { ...getRequestLogDetail(request), status: 'cancle' }, {
-                        refresh: false,
-                        successText: 'ลบคำขอเวรของเจ้าหน้าที่สำเร็จ',
-                        failureText: 'ลบคำขอเวรของเจ้าหน้าที่ไม่สำเร็จ'
-                    });
-                    if (!requestDeleted) {
-                        throw new Error('ลบคำขอเวรของเจ้าหน้าที่ลง Google Sheet ไม่สำเร็จ');
-                    }
-                }
-                const saved = await saveStaffToSheet();
-                showTransientStatus('ลบสำเร็จ', 'bg-emerald-600 text-white');
-                scheduleRealtimeRefresh(saved?.fallback ? 5000 : 1200);
-                alert('ลบสำเร็จ');
-            } catch (error) {
-                users = beforeUsers;
-                shiftRequests = beforeRequests;
-                refreshAdminViews();
-                alert(error?.message || 'ลบเจ้าหน้าที่ไม่สำเร็จ กรุณาลองใหม่');
-                throw error;
-            }
+            if (await saveStaffChange({ action: 'addStaff', user })) nameInput.value = '';
         };
 
         function escapeInlineValue(value) {
             return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         }
 
-        window.addDepartment = function() {
-            const input = document.getElementById('admin-add-department');
-            const department = input.value.trim();
-            if (!department) return;
-            if (departments.includes(department)) {
-                alert('มีหน่วยงานนี้อยู่แล้ว');
-                return;
-            }
-            departments.push(department);
-            input.value = '';
-            refreshAdminViews();
-        };
+        async function addStaffGroup(field) {
+            const input = document.getElementById(`admin-add-${field}`);
+            const value = input.value.trim();
+            if (value && await saveStaffChange({ action: 'addGroup', field, value })) input.value = '';
+        }
 
-        window.deleteDepartment = function(department) {
-            if (!confirm(`ยืนยันลบหน่วยงาน ${department} หรือไม่? รายชื่อและคำขอเวรของหน่วยงานนี้จะถูกลบด้วย`)) return;
-            const deletedUsers = users.filter((user) => user.department === department);
-            users = users.filter((user) => user.department !== department);
-            shiftRequests = shiftRequests.filter((request) => !deletedUsers.some((user) => isSameRequestUser(request, user)));
-            const index = departments.indexOf(department);
-            if (index >= 0) departments.splice(index, 1);
-            refreshAdminViews();
-            saveStaffToSheet();
-        };
-
-        window.changeDepartmentName = function(oldDepartment, newDepartment) {
-            const nextDepartment = newDepartment.trim();
-            if (!nextDepartment || nextDepartment === oldDepartment) return;
-            if (departments.includes(nextDepartment)) {
-                alert('มีหน่วยงานนี้อยู่แล้ว');
-                refreshAdminViews();
-                return;
-            }
-            const index = departments.indexOf(oldDepartment);
-            if (index >= 0) departments[index] = nextDepartment;
-            users.forEach((user) => {
-                if (user.department === oldDepartment) user.department = nextDepartment;
-            });
-            shiftRequests.forEach((request) => {
-                if (request.department === oldDepartment) request.department = nextDepartment;
-            });
-            refreshAdminViews();
-            saveStaffToSheet();
-        };
-
-        window.addPosition = function() {
-            const input = document.getElementById('admin-add-position');
-            const position = input.value.trim();
-            if (!position) return;
-            if (positions.includes(position)) {
-                alert('มีตำแหน่งนี้อยู่แล้ว');
-                return;
-            }
-            positions.push(position);
-            input.value = '';
-            refreshAdminViews();
-        };
-
-        window.deletePosition = function(position) {
-            if (!confirm(`ยืนยันลบตำแหน่ง ${position} หรือไม่? รายชื่อและคำขอเวรของตำแหน่งนี้จะถูกลบด้วย`)) return;
-            const deletedUsers = users.filter((user) => user.position === position);
-            users = users.filter((user) => user.position !== position);
-            shiftRequests = shiftRequests.filter((request) => !deletedUsers.some((user) => isSameRequestUser(request, user)));
-            const index = positions.indexOf(position);
-            if (index >= 0) positions.splice(index, 1);
-            refreshAdminViews();
-            saveStaffToSheet();
-        };
-
-        window.changePositionName = function(oldPosition, newPosition) {
-            const nextPosition = newPosition.trim();
-            if (!nextPosition || nextPosition === oldPosition) return;
-            if (positions.includes(nextPosition)) {
-                alert('มีตำแหน่งนี้อยู่แล้ว');
-                refreshAdminViews();
-                return;
-            }
-            const index = positions.indexOf(oldPosition);
-            if (index >= 0) positions[index] = nextPosition;
-            users.forEach((user) => {
-                if (user.position === oldPosition) user.position = nextPosition;
-            });
-            shiftRequests.forEach((request) => {
-                if (request.position === oldPosition) request.position = nextPosition;
-            });
-            refreshAdminViews();
-            saveStaffToSheet();
-        };
-
-        window.addLevel = function() {
-            const input = document.getElementById('admin-add-level');
-            const level = input.value.trim();
-            if (!level) return;
-            if (levels.includes(level)) {
-                alert('มี Level นี้อยู่แล้ว');
-                return;
-            }
-            levels.push(level);
-            input.value = '';
-            refreshAdminViews();
-        };
-
-        window.deleteLevel = function(level) {
-            if (!confirm(`ยืนยันลบ ${level} หรือไม่? รายชื่อและคำขอเวรของ Level นี้จะถูกลบด้วย`)) return;
-            const deletedUsers = users.filter((user) => user.level === level);
-            users = users.filter((user) => user.level !== level);
-            shiftRequests = shiftRequests.filter((request) => !deletedUsers.some((user) => isSameRequestUser(request, user)));
-            const index = levels.indexOf(level);
-            if (index >= 0) levels.splice(index, 1);
-            refreshAdminViews();
-            saveStaffToSheet();
-        };
-
-        window.changeLevelName = async function(oldLevel, newLevel) {
-            const nextLevel = newLevel.trim();
-            if (!nextLevel || nextLevel === oldLevel) return;
-            if (levels.includes(nextLevel)) {
-                alert('มี Level นี้อยู่แล้ว');
-                refreshAdminViews();
-                return;
-            }
-            const effectiveDate = getNextMonthStartDate();
-            const affectedUsers = users.filter((user) => user.level === oldLevel);
-            const confirmText = `เปลี่ยนชื่อ ${oldLevel} เป็น ${nextLevel}\n\nจะมีผลกับเจ้าหน้าที่และคำขอตั้งแต่ ${formatDisplayDate(effectiveDate)} เป็นต้นไปเท่านั้น\nข้อมูลย้อนหลังและเดือนปัจจุบันจะคง ${oldLevel} ไว้\n\nยืนยันหรือไม่?`;
-            if (!confirm(confirmText)) {
-                refreshAdminViews();
-                return;
-            }
-
-            const beforeUsers = users.map((user) => ({ ...user }));
-            const beforeRequests = cloneShiftRequestsSnapshot();
-            const index = levels.indexOf(oldLevel);
-            if (index >= 0) levels[index] = nextLevel;
-            const writes = [];
-            affectedUsers.forEach((user) => {
-                user.level = nextLevel;
-                writes.push(...getLevelChangeWritesForFutureRequests(user, oldLevel, nextLevel, effectiveDate));
-            });
-
-            for (const item of writes) {
-                const saved = await logAction(item.action, item.detail, {
-                    refresh: false,
-                    successText: 'บันทึกการเปลี่ยน Level สำเร็จ',
-                    failureText: 'บันทึกการเปลี่ยน Level ไม่สำเร็จ'
-                });
-                if (!saved) {
-                    users = beforeUsers;
-                    shiftRequests = beforeRequests;
-                    refreshAdminViews();
-                    alert('บันทึกการเปลี่ยน Level ลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
-                    return;
+        function handleStaffGroupAction(event) {
+            const control = event.target.closest('[data-staff-group-action]');
+            if (!control || control.dataset.event !== event.type || staffChangeInFlight) return;
+            const { staffField: field, staffValue: oldValue } = control.closest('[data-staff-field]').dataset;
+            if (control.dataset.staffGroupAction === 'delete') {
+                if (confirm(`ยืนยันลบ ${oldValue} หรือไม่? รายชื่อเจ้าหน้าที่ในรายการนี้จะถูกลบ และคำขอเวรของเจ้าหน้าที่เหล่านั้นจะถูกยกเลิก`)) {
+                    void saveStaffChange({ action: 'deleteGroup', field, oldValue });
                 }
+                return;
             }
 
-            refreshAdminViews();
-            saveStaffToSheet();
-            scheduleRealtimeRefresh(1200);
-        };
+            const value = control.value.trim();
+            if (!value || value === oldValue) {
+                control.value = oldValue;
+                return;
+            }
+            const effectiveDate = field === 'level' ? getFirstAllowedMonthStartDate() : '';
+            if (effectiveDate && !confirmStaffLevelChange(oldValue, value, effectiveDate)) {
+                control.value = oldValue;
+                return;
+            }
+            void saveStaffChange({ action: 'renameGroup', field, oldValue, value, effectiveDate });
+        }
 
         window.deleteShift = async function(requestId) {
             await cancelShiftAndCheckQueue(requestId);
@@ -4063,39 +3776,40 @@
             }
 
             tbody.innerHTML = filteredUsers.map((user) => `
-                ${(() => {
-                    const userIdArg = JSON.stringify(user.id);
-                    const userNameArg = JSON.stringify(user.name);
-                    return `
-                <tr class="hover:bg-gray-50 transition">
+                <tr data-staff="${makeUserSelectValue(user)}" class="hover:bg-gray-50 transition">
                     <td class="p-3 font-medium text-gray-700">
-                        <input value="${user.name}" onchange="changeUserName(${userIdArg}, ${userNameArg}, this.value)" class="w-full p-1.5 text-sm bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
+                        <input value="${escapeExcelCell(user.name)}" data-staff-action="name" data-event="change" aria-label="ชื่อ" class="w-full p-1.5 text-sm bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
                     </td>
                     <td class="p-3">
-                        <select onchange="changeUserDepartment(${userIdArg}, ${userNameArg}, this.value)" class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
-                            ${departments.map((department) => `<option value="${department}" ${user.department === department ? 'selected' : ''}>${department}</option>`).join('')}
+                        <select data-staff-action="department" data-event="change" aria-label="หน่วยงาน" class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
+                            ${renderStaffOptions(departments, user.department)}
                         </select>
                     </td>
                     <td class="p-3">
-                        <select onchange="changeUserPosition(${userIdArg}, ${userNameArg}, this.value)" class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
-                            ${positions.map((position) => `<option value="${position}" ${user.position === position ? 'selected' : ''}>${position}</option>`).join('')}
+                        <select data-staff-action="position" data-event="change" aria-label="ตำแหน่ง" class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
+                            ${renderStaffOptions(positions, user.position)}
                         </select>
                     </td>
                     <td class="p-3">
                         <div class="flex flex-wrap items-center gap-1">
-                            <select class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
-                                ${levels.map((level) => `<option value="${level}" ${user.level === level ? 'selected' : ''}>${level}</option>`).join('')}
+                            <select data-staff-level aria-label="Level" class="p-1 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500">
+                                ${renderStaffOptions(levels, user.level)}
                             </select>
-                            <button onclick="changeUserLevel(${userIdArg}, ${userNameArg}, this.parentElement.querySelector('select').value).catch(handleAsyncActionError)" class="rounded-md bg-amber-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-amber-700">บันทึก</button>
+                            <button type="button" data-staff-action="level" data-event="click" class="rounded-md bg-amber-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-amber-700">บันทึก</button>
                         </div>
                     </td>
                     <td class="p-3">
-                        <button onclick="deleteUser(${userIdArg}, ${userNameArg}).catch(handleAsyncActionError)" class="text-red-500 hover:text-red-700 text-xs font-semibold">ลบ</button>
+                        <button type="button" data-staff-action="delete" data-event="click" class="text-red-500 hover:text-red-700 text-xs font-semibold">ลบ</button>
                     </td>
                 </tr>
-                    `;
-                })()}
             `).join('');
+        }
+
+        function renderStaffOptions(options, selected = '') {
+            return options.map((value) => {
+                const label = escapeExcelCell(value);
+                return `<option value="${label}" ${selected === value ? 'selected' : ''}>${label}</option>`;
+            }).join('');
         }
 
         function renderAdminPositionFilter() {
@@ -4105,7 +3819,7 @@
             const selectedPosition = select.value;
             select.innerHTML = `
                 <option value="">ทุกตำแหน่ง</option>
-                ${positions.map((position) => `<option value="${position}">${position}</option>`).join('')}
+                ${renderStaffOptions(positions)}
             `;
             select.value = positions.includes(selectedPosition) ? selectedPosition : '';
         }
@@ -4116,9 +3830,9 @@
             const levelSelect = document.getElementById('admin-add-user-level');
             if (!departmentSelect || !positionSelect || !levelSelect) return;
 
-            departmentSelect.innerHTML = departments.map((department) => `<option value="${department}">${department}</option>`).join('');
-            positionSelect.innerHTML = positions.map((position) => `<option value="${position}">${position}</option>`).join('');
-            levelSelect.innerHTML = levels.map((level) => `<option value="${level}">${level}</option>`).join('');
+            departmentSelect.innerHTML = renderStaffOptions(departments);
+            positionSelect.innerHTML = renderStaffOptions(positions);
+            levelSelect.innerHTML = renderStaffOptions(levels);
 
             renderAdminAddPanel();
             renderAdminSelectedList();
@@ -4303,35 +4017,21 @@
             }
 
             section.classList.remove('hidden');
-            if (selectedType === 'department') {
-                title.innerText = 'รายการหน่วยงานเดิม';
-                container.innerHTML = departments.map((department) => `
-                    <div class="flex items-center gap-2 rounded-lg bg-white p-2 text-xs">
-                        <input value="${department}" onchange="changeDepartmentName('${escapeInlineValue(department)}', this.value)" class="min-w-0 flex-1 p-1.5 border border-amber-100 rounded-md">
-                        <button onclick="deleteDepartment('${escapeInlineValue(department)}')" class="text-red-500 hover:text-red-700 font-semibold">ลบ</button>
+            const [label, values] = {
+                department: ['หน่วยงาน', departments],
+                position: ['ตำแหน่ง', positions],
+                level: ['Level', levels]
+            }[selectedType];
+            title.innerText = `รายการ${label}เดิม`;
+            container.innerHTML = values.map((value) => {
+                const escaped = escapeExcelCell(value);
+                return `
+                    <div data-staff-field="${selectedType}" data-staff-value="${escaped}" class="flex items-center gap-2 rounded-lg bg-white p-2 text-xs">
+                        <input value="${escaped}" aria-label="${label}" data-staff-group-action="rename" data-event="change" class="min-w-0 flex-1 p-1.5 border border-amber-100 rounded-md">
+                        <button type="button" data-staff-group-action="delete" data-event="click" class="text-red-500 hover:text-red-700 font-semibold">ลบ</button>
                     </div>
-                `).join('');
-                return;
-            }
-
-            if (selectedType === 'position') {
-                title.innerText = 'รายการตำแหน่งเดิม';
-                container.innerHTML = positions.map((position) => `
-                    <div class="flex items-center gap-2 rounded-lg bg-white p-2 text-xs">
-                        <input value="${position}" onchange="changePositionName('${escapeInlineValue(position)}', this.value)" class="min-w-0 flex-1 p-1.5 border border-amber-100 rounded-md">
-                        <button onclick="deletePosition('${escapeInlineValue(position)}')" class="text-red-500 hover:text-red-700 font-semibold">ลบ</button>
-                    </div>
-                `).join('');
-                return;
-            }
-
-            title.innerText = 'รายการ Level เดิม';
-            container.innerHTML = levels.map((level) => `
-                <div class="flex items-center gap-2 rounded-lg bg-white p-2 text-xs">
-                    <input value="${level}" onchange="changeLevelName('${escapeInlineValue(level)}', this.value).catch(handleAsyncActionError)" class="min-w-0 flex-1 p-1.5 border border-amber-100 rounded-md">
-                    <button onclick="deleteLevel('${escapeInlineValue(level)}')" class="text-red-500 hover:text-red-700 font-semibold">ลบ</button>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         function getDutyRosterMonthKey() {

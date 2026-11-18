@@ -35,7 +35,13 @@ const ADMIN_AUDIT_LOG_HEADERS = [
   'Verified Session',
   'Detail JSON'
 ];
-const SCRIPT_VERSION = '2026-09-11-admin-account-audit-log';
+const STAFF_CATALOG_KEY = 'staffCatalog';
+const STAFF_CATALOG_DEFAULTS = {
+  department: ['หน่วยบริการทางการแพทย์ฉุกเฉิน', 'รับ-ส่งต่อ'],
+  position: ['พนักงานทั่วไป'],
+  level: []
+};
+const SCRIPT_VERSION = '2026-11-18-manage-staff';
 const THAI_MONTH_INDEX = {
   'มกราคม': 0,
   'ม.ค.': 0,
@@ -158,15 +164,9 @@ function doGet(e) {
     }
   }
 
-  if (params.action === 'saveStaff') {
+  if (params.action === 'manageStaff') {
     try {
-      const users = JSON.parse(params.users || '[]');
-      saveStaff_(users);
-      appendAdminAuditLog_('SAVE_STAFF', { userCount: (users || []).length }, {
-        actorUserId: params.actorUserId,
-        adminSessionToken: params.adminSessionToken
-      });
-      return createJsonpResponse_(params.callback, { ok: true, userCount: (users || []).length });
+      return createJsonpResponse_(params.callback, manageStaff_(JSON.parse(params.change || '{}'), params));
     } catch (error) {
       return createJsonpResponse_(params.callback, {
         ok: false,
@@ -235,14 +235,6 @@ function doGet(e) {
 function doPost(e) {
   const payload = JSON.parse((e && e.postData && e.postData.contents) || '{}');
   const detail = payload.detail || {};
-
-  if (payload.action === 'SAVE_STAFF') {
-    saveStaff_(detail.users || []);
-    appendAdminAuditLog_(payload.action, { userCount: (detail.users || []).length }, payload);
-    return ContentService
-      .createTextOutput(JSON.stringify({ ok: true }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
 
   if (payload.action === 'SAVE_REQUEST_RULES') {
     saveRequestRules_(detail.rules || {});
@@ -349,44 +341,56 @@ function getStaffSheet_() {
 }
 
 function getStaffData_() {
-  const sheet = getStaffSheet_();
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) {
-    return {
-      ok: true,
-      users: [],
-      departments: [],
-      positions: [],
-      levels: []
-    };
-  }
+  const users = getStaffRecords_(getStaffSheet_()).map(({ user }) => user);
+  return makeStaffData_(users, getStaffCatalog_().catalog);
+}
 
+function canonicalStaffDepartment_(value) {
+  const text = String(value || '').trim();
+  const compact = text.replace(/\s+/g, '');
+  if (/บริการ.*แพทย์ฉุกเฉิน/.test(compact)) return 'หน่วยบริการทางการแพทย์ฉุกเฉิน';
+  if (/รับ-?ส่งต่อ/.test(compact)) return 'รับ-ส่งต่อ';
+  return text;
+}
+
+function getStaffColumns_(sheet) {
   const headers = sheet.getRange(1, STAFF_START_COLUMN, 1, STAFF_HEADERS.length).getValues()[0].map((value) => String(value || '').trim());
   const nameIndex = findHeaderIndex_(headers, ['Name', 'ชื่อ', 'รายชื่อ']);
   const departmentIndex = findHeaderIndex_(headers, ['Department', 'หน่วยงาน', 'หน่วย']);
   const positionIndex = findHeaderIndex_(headers, ['Position', 'ตำแหน่ง']);
   const levelIndex = findHeaderIndex_(headers, ['Level', 'ระดับ']);
   const hasHeader = [nameIndex, departmentIndex, positionIndex, levelIndex].some((index) => index >= 0);
-  const firstDataRow = hasHeader ? 2 : 1;
-  const ids = sheet.getRange(firstDataRow, STAFF_ID_COLUMN, lastRow - firstDataRow + 1, 1).getValues();
-  const values = sheet.getRange(firstDataRow, STAFF_START_COLUMN, lastRow - firstDataRow + 1, STAFF_HEADERS.length).getValues();
+  return {
+    firstDataRow: hasHeader ? 2 : 1,
+    columns: {
+      id: 0,
+      name: (nameIndex < 0 ? 0 : nameIndex) + 1,
+      department: (departmentIndex < 0 ? 1 : departmentIndex) + 1,
+      position: (positionIndex < 0 ? 2 : positionIndex) + 1,
+      level: (levelIndex < 0 ? 3 : levelIndex) + 1
+    }
+  };
+}
 
-  const users = values
-    .map((row, index) => ({
-      id: String(ids[index][0] || '').trim(),
-      name: String(row[nameIndex >= 0 ? nameIndex : 0] || '').trim(),
-      department: String(row[departmentIndex >= 0 ? departmentIndex : 1] || '').trim(),
-      position: String(row[positionIndex >= 0 ? positionIndex : 2] || '').trim(),
-      level: String(row[levelIndex >= 0 ? levelIndex : 3] || '').trim()
-    }))
-    .filter((user) => user.id && user.name && user.department && user.position && user.level);
+function getStaffRecords_(sheet) {
+  const lastRow = sheet.getLastRow();
+  const { firstDataRow, columns } = getStaffColumns_(sheet);
+  if (lastRow < firstDataRow) return [];
+  const values = sheet.getRange(firstDataRow, STAFF_ID_COLUMN, lastRow - firstDataRow + 1, STAFF_HEADERS.length + 1).getValues();
+  return values.map((row, index) => {
+    const user = Object.fromEntries(Object.entries(columns).map(([field, column]) => [field, String(row[column] || '').trim()]));
+    user.department = canonicalStaffDepartment_(user.department);
+    return { row, rowIndex: firstDataRow + index, columns, user };
+  }).filter(({ user }) => Object.values(user).every(Boolean));
+}
 
+function makeStaffData_(users, catalog) {
   return {
     ok: true,
     users,
-    departments: uniqueValues_(users.map((user) => user.department)),
-    positions: uniqueValues_(users.map((user) => user.position)),
-    levels: uniqueValues_(users.map((user) => user.level))
+    departments: uniqueValues_([...catalog.department, ...users.map((user) => user.department)]),
+    positions: uniqueValues_([...catalog.position, ...users.map((user) => user.position)]),
+    levels: uniqueValues_([...catalog.level, ...users.map((user) => user.level)])
   };
 }
 
@@ -401,23 +405,255 @@ function getBootstrapData_() {
   };
 }
 
-function saveStaff_(users) {
-  const sheet = getStaffSheet_();
-  sheet.getRange(1, STAFF_ID_COLUMN, sheet.getMaxRows(), STAFF_HEADERS.length + 1).clearContent();
-  sheet.getRange(1, STAFF_ID_COLUMN, 1, STAFF_HEADERS.length + 1).setValues([['User ID', ...STAFF_HEADERS]]);
+function getStaffCatalog_() {
+  const sheet = getRequestSettingsSheet_();
+  const lastRow = sheet.getLastRow();
+  const rows = lastRow > 1 ? sheet.getRange(2, 1, lastRow - 1, 3).getValues() : [];
+  const index = rows.findIndex((row) => row[0] === STAFF_CATALOG_KEY);
+  const row = index < 0 ? null : rows[index];
+  const stored = row ? JSON.parse(row[1] || '{}') : {};
+  const catalog = Object.fromEntries(Object.entries(STAFF_CATALOG_DEFAULTS).map(([field, defaults]) =>
+    [field, Array.isArray(stored[field]) ? stored[field] : defaults.slice()]));
+  return { sheet, catalog, row, rowIndex: index + 2 };
+}
 
-  const rows = (users || [])
-    .map((user) => [
-      String(user.id || '').trim(),
-      String(user.name || '').trim(),
-      String(user.department || '').trim(),
-      String(user.position || '').trim(),
-      String(user.level || '').trim()
-    ])
-    .filter((row) => row.every(Boolean));
+function getStaffLevelEffectiveDate_() {
+  const today = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd');
+  const [year, month] = today.split('-').map(Number);
+  const rules = getRequestRulesData_().rules.earlyCloseRules;
+  for (let offset = 0; ; offset += 1) {
+    const monthKey = new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 7);
+    const standardDeadline = new Date(Date.UTC(year, month - 3 + offset, 25)).toISOString().slice(0, 10);
+    const deadline = rules.filter((rule) => rule.requestMonth === monthKey)
+      .reduce((earliest, rule) => rule.closeDate < earliest ? rule.closeDate : earliest, standardDeadline);
+    if (today <= deadline) return monthKey + '-01';
+  }
+}
 
-  if (rows.length) {
-    sheet.getRange(2, STAFF_ID_COLUMN, rows.length, STAFF_HEADERS.length + 1).setValues(rows);
+function manageStaff_(change, params) {
+  const actor = getVerifiedAdminUserId_(params.actorUserId, params.adminSessionToken);
+  if (!actor) throw new Error('เซสชัน Admin หมดอายุ กรุณาเข้าสู่ระบบใหม่');
+  return withSpreadsheetWriteLock_(() => applyStaffChange_(change, actor));
+}
+
+function withSpreadsheetWriteLock_(write) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    return write();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function applyStaffChange_(change, actor) {
+  const { action, field } = change;
+  const isGroup = ['addGroup', 'renameGroup', 'deleteGroup'].includes(action);
+  const isEdit = ['updateStaff', 'renameGroup'].includes(action);
+  const isDelete = ['deleteStaff', 'deleteGroup'].includes(action);
+  if (!isEdit && !isDelete && !['addStaff', 'addGroup'].includes(action)) throw new Error('ไม่รู้จักรายการแก้ไข');
+  const editableFields = isGroup ? ['department', 'position', 'level'] : ['name', 'department', 'position', 'level'];
+  if ((isGroup || isEdit) && !editableFields.includes(field)) throw new Error('ไม่รู้จักข้อมูลที่ต้องแก้ไข');
+
+  const staffSheet = getStaffSheet_();
+  const records = getStaffRecords_(staffSheet);
+  const users = records.map(({ user }) => user);
+  const catalogRecord = getStaffCatalog_();
+  const catalog = catalogRecord.catalog;
+  const staff = makeStaffData_(users, catalog);
+  const listKey = { department: 'departments', position: 'positions', level: 'levels' }[field];
+  const oldValue = isEdit || action === 'deleteGroup' ? staffValue_(field, change.oldValue) : '';
+  const newValue = isEdit || action === 'addGroup' ? staffValue_(field, change.value) : '';
+  let effectiveDate = '';
+  if (isEdit && oldValue === newValue) throw new Error('ค่าใหม่ตรงกับค่าเดิม');
+  if (isEdit && field === 'level') {
+    effectiveDate = getStaffLevelEffectiveDate_();
+    if (change.effectiveDate !== effectiveDate) {
+      throw new Error('เดือนที่เปิดรับคำขอมีการเปลี่ยนแปลง กรุณารีเฟรชก่อนบันทึก Level');
+    }
+  }
+
+  let selected = [];
+  if (isGroup) {
+    const options = staff[listKey];
+    if (action !== 'addGroup' && !options.includes(oldValue)) throw new Error('ไม่พบรายการเดิม กรุณารีเฟรช');
+    if (newValue && options.includes(newValue)) throw new Error('มีรายการนี้อยู่แล้ว');
+    if (action !== 'addGroup') selected = records.filter(({ user }) => user[field] === oldValue);
+    catalog[field] = catalog[field].filter((value) => value !== oldValue);
+    if (newValue) catalog[field].push(newValue);
+  } else if (action !== 'addStaff') {
+    selected = records.filter(({ user }) => user.id === change.userId && user.name === change.userName);
+    if (selected.length !== 1 || isEdit && selected[0].user[field] !== oldValue) {
+      throw new Error('ข้อมูลเจ้าหน้าที่เปลี่ยนแปลงหรือซ้ำกัน กรุณารีเฟรชก่อนทำรายการ');
+    }
+  }
+
+  const writes = [];
+  const appendRows = new Map();
+  let addedUser = null;
+  if (action === 'addStaff') {
+    const { columns } = getStaffColumns_(staffSheet);
+    const row = Array(STAFF_HEADERS.length + 1).fill('');
+    addedUser = { id: Utilities.getUuid() };
+    Object.keys(columns).filter((key) => key !== 'id').forEach((key) => {
+      addedUser[key] = staffValue_(key, change.user && change.user[key]);
+    });
+    Object.entries(columns).forEach(([key, column]) => { row[column] = addedUser[key]; });
+    queueStaffAppend_(writes, appendRows, staffSheet, row);
+  }
+  if (isGroup) {
+    const row = [STAFF_CATALOG_KEY, JSON.stringify(catalog), new Date()];
+    if (catalogRecord.row) {
+      queueStaffRow_(writes, catalogRecord.sheet, catalogRecord.rowIndex, catalogRecord.row, row);
+    } else {
+      queueStaffAppend_(writes, appendRows, catalogRecord.sheet, row);
+    }
+  }
+
+  const staffChanges = new Map();
+  selected.forEach(({ user, row, rowIndex, columns }) => {
+    if (isDelete) {
+      staffChanges.set(user, null);
+      queueStaffRow_(writes, staffSheet, rowIndex, row, row.map(() => ''));
+      return;
+    }
+    if (field === 'name' && users.some((other) => other !== user && other.id === user.id && other.name === newValue)) {
+      throw new Error('ชื่อและ User ID ซ้ำกับเจ้าหน้าที่อีกราย');
+    }
+    staffChanges.set(user, { ...user, [field]: newValue });
+    const column = columns[field];
+    writes.push({ range: staffSheet.getRange(rowIndex, column + 1), before: [[row[column]]], after: [[newValue]] });
+  });
+
+  const changedRequests = planStaffRequestChanges_(
+    writes, appendRows, users, staffChanges, field, effectiveDate, action === 'renameGroup' ? oldValue : ''
+  );
+  const singleUser = !isGroup && selected.length ? selected[0].user : null;
+  const detail = {
+    userId: (singleUser || addedUser || {}).id || '',
+    name: (singleUser || addedUser || {}).name || '',
+    field, effectiveDate, startDate: effectiveDate,
+    before: isGroup ? oldValue : singleUser,
+    after: isGroup ? newValue : (singleUser ? staffChanges.get(singleUser) : addedUser),
+    staffCount: selected.length + Number(Boolean(addedUser)),
+    requestCount: changedRequests.filter((item) => !item.split).length,
+    splitCount: changedRequests.filter((item) => item.split).length
+  };
+  const auditActions = {
+    addStaff: 'ADD_STAFF', updateStaff: 'UPDATE_STAFF', deleteStaff: 'DELETE_STAFF',
+    addGroup: 'ADD_STAFF_GROUP', renameGroup: 'RENAME_STAFF_GROUP', deleteGroup: 'DELETE_STAFF_GROUP'
+  };
+  queueStaffAppend_(writes, appendRows, getAdminAuditLogSheet_(), makeAdminAuditLogRow_(auditActions[action], detail, actor, true));
+  commitStaffWrites_(writes);
+
+  const nextUsers = users.map((user) => staffChanges.has(user) ? staffChanges.get(user) : user).filter(Boolean);
+  if (addedUser) nextUsers.push(addedUser);
+  return {
+    ok: true,
+    staff: makeStaffData_(nextUsers, catalog),
+    requests: changedRequests.map((item) => item.request),
+    requestCount: detail.requestCount
+  };
+}
+
+function staffValue_(field, value) {
+  const text = field === 'department' ? canonicalStaffDepartment_(value) : String(value || '').trim();
+  if (!text || text.startsWith('=') || text.length > 250) throw new Error('ข้อมูลเจ้าหน้าที่ไม่ถูกต้อง');
+  return text;
+}
+
+function planStaffRequestChanges_(writes, appendRows, users, staffChanges, field, effectiveDate, oldGroupValue) {
+  if (!staffChanges.size) return [];
+  const spreadsheet = getSpreadsheet_();
+  const byId = new Map();
+  getAllRequestSheets_(spreadsheet).forEach((sheet) => {
+    getRequestRowsFromSheet_(sheet).forEach((record) => {
+      const id = String(record.request.id);
+      const existing = byId.get(id) || [];
+      existing.push({ ...record, sheet });
+      byId.set(id, existing);
+    });
+  });
+  let nextId = Date.now() * 100;
+  const changes = [];
+  const isActive = (request) => ['Approved', 'Pending'].includes(String(request.status || '').trim());
+  const requestColumn = { name: 0, department: 1, position: 2, level: 3 }[field];
+  byId.forEach((copies) => {
+    const latest = copies.reduce((a, b) => getTimestampValue_(a.request.timestamp) > getTimestampValue_(b.request.timestamp) ? a : b);
+    const { request } = latest;
+    if (!isActive(request)) return;
+    const requestValue = field === 'department' ? canonicalStaffDepartment_(request.department) : String(request[field] || '').trim();
+    if (oldGroupValue && requestValue !== oldGroupValue) return;
+    const idMatches = users.filter((user) => user.id === String(request.userId || '').trim());
+    const user = idMatches.length === 1 ? idMatches[0] : findStaffUserForRequest_(request, users);
+    if (!staffChanges.has(user)) return;
+    const nextUser = staffChanges.get(user);
+    if (!nextUser) {
+      copies.filter((record) => isActive(record.request)).forEach((record) => {
+        writes.push({ range: record.sheet.getRange(record.rowIndex, 8), before: [[record.row[7]]], after: [['cancle']] });
+      });
+      changes.push({ request: { ...request, status: 'cancle' } });
+    } else if (!effectiveDate || request.startDate >= effectiveDate) {
+      if (String(latest.row[requestColumn]) === nextUser[field]) return;
+      const range = latest.sheet.getRange(latest.rowIndex, requestColumn + 1);
+      writes.push({ range, before: [[latest.row[requestColumn]]], after: [[nextUser[field]]] });
+      changes.push({ request: { ...request, [field]: nextUser[field] } });
+    } else if (request.endDate >= effectiveDate && String(latest.row[requestColumn]) !== nextUser[field]) {
+      while (byId.has(String(nextId))) nextId += 1;
+      const priorDate = new Date(effectiveDate + 'T00:00:00Z');
+      priorDate.setUTCDate(priorDate.getUTCDate() - 1);
+      const previousEnd = priorDate.toISOString().slice(0, 10);
+      const endRange = latest.sheet.getRange(latest.rowIndex, 7);
+      writes.push({ range: endRange, before: [[latest.row[6]]], after: [[previousEnd]] });
+      const splitRow = latest.row.slice();
+      splitRow[requestColumn] = nextUser[field];
+      splitRow[5] = effectiveDate;
+      splitRow[8] = String(nextId++);
+      const sheet = getRequestSheet_(spreadsheet, effectiveDate);
+      queueStaffAppend_(writes, appendRows, sheet, splitRow);
+      changes.push(
+        { request: { ...request, endDate: previousEnd } },
+        { request: { ...request, id: splitRow[8], startDate: effectiveDate, [field]: nextUser[field], sourceSheet: sheet.getName() }, split: true }
+      );
+    }
+  });
+  return changes;
+}
+
+function queueStaffRow_(writes, sheet, index, before, after) {
+  writes.push({ range: sheet.getRange(index, 1, 1, after.length), before: [before], after: [after] });
+}
+
+function queueStaffAppend_(writes, appendRows, sheet, row) {
+  const id = sheet.getSheetId();
+  const index = (appendRows.get(id) || sheet.getLastRow()) + 1;
+  appendRows.set(id, index);
+  if (index > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), index - sheet.getMaxRows());
+  if (row.length > sheet.getMaxColumns()) sheet.insertColumnsAfter(sheet.getMaxColumns(), row.length - sheet.getMaxColumns());
+  queueStaffRow_(writes, sheet, index, row.map(() => ''), row);
+}
+
+function commitStaffWrites_(writes) {
+  const applied = [];
+  try {
+    writes.forEach((write) => {
+      applied.push(write);
+      write.range.setValues(write.after);
+    });
+    SpreadsheetApp.flush();
+  } catch (error) {
+    let rollbackFailed = false;
+    applied.reverse().forEach((write) => {
+      try {
+        write.range.setValues(write.before);
+      } catch (rollbackError) {
+        rollbackFailed = true;
+        console.error(rollbackError);
+      }
+    });
+    SpreadsheetApp.flush();
+    if (rollbackFailed) throw new Error('บันทึกไม่ครบ กรุณาตรวจข้อมูลใน Google Sheet ก่อนทำรายการซ้ำ');
+    throw error;
   }
 }
 
@@ -505,6 +741,14 @@ function getRequestRulesData_() {
 }
 
 function saveRequestRules_(rules) {
+  return withSpreadsheetWriteLock_(() => {
+    const result = writeRequestRules_(rules);
+    SpreadsheetApp.flush();
+    return result;
+  });
+}
+
+function writeRequestRules_(rules) {
   const sheet = getRequestSettingsSheet_();
   const normalizedRules = normalizeRequestRules_(rules);
   const payload = JSON.stringify(normalizedRules);
@@ -717,6 +961,7 @@ function syncRequest_(action, detail, clientTimestamp) {
       deleteRequestRows_(matchingRows);
       sheet.appendRow(row);
     }
+    SpreadsheetApp.flush();
   } finally {
     lock.releaseLock();
   }
@@ -1134,7 +1379,6 @@ function shouldAuditAdminAction_(action, payload) {
     return false;
   }
   return [
-    'SAVE_STAFF',
     'SAVE_REQUEST_RULES',
     'APPROVE_PENDING_REQUEST',
     'PROMOTE_PENDING_REQUEST',
@@ -1150,10 +1394,18 @@ function appendAdminAuditLog_(action, detail, payload) {
   const actorUserId = normalizeAdminUserId_((payload && payload.actorUserId) || (payload && payload.userId));
   const sessionToken = payload && (payload.sessionToken || payload.adminSessionToken);
   const verifiedActor = getVerifiedAdminUserId_(actorUserId, sessionToken);
+  const row = makeAdminAuditLogRow_(action, detail, verifiedActor || actorUserId || 'unknown', Boolean(verifiedActor));
+  withSpreadsheetWriteLock_(() => {
+    getAdminAuditLogSheet_().appendRow(row);
+    SpreadsheetApp.flush();
+  });
+}
+
+function makeAdminAuditLogRow_(action, detail, actor, verified) {
   const safeDetail = detail || {};
-  getAdminAuditLogSheet_().appendRow([
+  return [
     new Date(),
-    verifiedActor || actorUserId || 'unknown',
+    actor,
     action,
     safeDetail.requestId || '',
     safeDetail.userId || '',
@@ -1162,9 +1414,9 @@ function appendAdminAuditLog_(action, detail, payload) {
     safeDetail.startDate || '',
     safeDetail.endDate || '',
     safeDetail.status || '',
-    verifiedActor ? 'Yes' : 'No',
+    verified ? 'Yes' : 'No',
     JSON.stringify(safeDetail)
-  ]);
+  ];
 }
 
 function getTimestampValue_(value) {
