@@ -138,17 +138,21 @@ context.saveRequestRules_({ earlyCloseRules: [{ requestMonth: '2027-01', closeDa
 assert.equal(context.getStaffLevelEffectiveDate_(), '2027-02-01');
 
 const user = { id: '7', name: userName, department: 'ER', position: 'RN', level: 'Level 2' };
-const elements = { 'admin-user-table': {}, 'admin-position-filter': { value: '' }, 'admin-user-table-count': {} };
+const otherUser = { id: '8', name: 'Staff B', department: 'ER', position: 'PN', level: 'Level 2' };
+const elements = {
+  'admin-user-table': {}, 'admin-position-filter': { value: '' },
+  'admin-staff-search': { value: '' }, 'admin-user-table-count': {}
+};
 const clientChanges = [];
 const client = vm.createContext({
-  users: [user], departments: ['ER'], levels: ['Level 2', 'Level 3'], positions: ['RN'],
+  users: [user, otherUser], departments: ['ER'], levels: ['Level 2', 'Level 3'], positions: ['RN', 'PN'],
   document: { getElementById: (id) => elements[id] }, renderAdminPositionFilter() {},
   staffChangeInFlight: false, confirm: () => true, formatDisplayDate: String,
   getFirstAllowedMonthStartDate: () => '2027-01-01',
   saveStaffChange: (change) => clientChanges.push(change)
 });
 const functionNames = [
-  'normalizeUserId', 'makeUserSelectValue', 'parseUserSelectValue', 'escapeExcelCell',
+  'normalizeName', 'normalizeUserId', 'makeUserSelectValue', 'parseUserSelectValue', 'escapeExcelCell',
   'renderStaffOptions', 'renderAdminTable', 'confirmStaffLevelChange', 'handleStaffTableAction', 'handleStaffGroupAction'
 ];
 vm.runInContext(functionNames.map((name) => {
@@ -160,6 +164,18 @@ client.renderAdminTable();
 const rowHtml = elements['admin-user-table'].innerHTML;
 assert.ok(rowHtml.includes('Staff &quot;A&quot;'));
 assert.ok(!/on(change|click)=/.test(rowHtml));
+elements['admin-staff-search'].value = '  STAFFb ';
+client.renderAdminTable();
+assert.ok(elements['admin-user-table'].innerHTML.includes('Staff B'));
+assert.ok(!elements['admin-user-table'].innerHTML.includes('Staff &quot;A&quot;'));
+assert.match(elements['admin-user-table-count'].innerText, /1.*2/);
+elements['admin-position-filter'].value = 'RN';
+client.renderAdminTable();
+assert.ok(!elements['admin-user-table'].innerHTML.includes('data-staff='));
+elements['admin-staff-search'].value = '';
+client.renderAdminTable();
+assert.ok(elements['admin-user-table'].innerHTML.includes('Staff &quot;A&quot;'));
+assert.ok(!elements['admin-user-table'].innerHTML.includes('Staff B'));
 const row = { dataset: { staff: client.makeUserSelectValue(user) }, querySelector: () => ({ value: 'Level 3' }) };
 function checkTableAction(staffAction, event, value) {
   const control = { dataset: { staffAction, event }, closest: () => row, value };
