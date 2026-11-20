@@ -688,13 +688,14 @@
             <div class="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
                 <i class="fa-solid fa-triangle-exclamation"></i>
             </div>
-            <h3 class="text-xl font-bold text-gray-800 mb-2">โค้วต้าเต็ม</h3>
+            <h3 class="text-xl font-bold text-gray-800 mb-2">โควต้าเต็ม</h3>
             <p class="text-gray-600 mb-6 text-sm leading-relaxed">
-                กดยืนยันเพื่อเป็นตัวสำรอง หรือยกเลิก
+                กดยืนยันเพื่อเข้าคิวตัวสำรอง คิวนี้รับได้ไม่จำกัดจำนวน
             </p>
+            <p id="reserve-save-status" role="status" class="mb-4 text-sm text-red-700" hidden></p>
             <div class="flex gap-3">
-                <button id="btn-reserve-cancel" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition">ยกเลิก</button>
-                <button id="btn-reserve-confirm" class="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl shadow-md shadow-amber-100 transition">ยืนยัน</button>
+                <button id="btn-reserve-cancel" type="button" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition disabled:opacity-50">ยกเลิก</button>
+                <button id="btn-reserve-confirm" type="button" class="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl shadow-md shadow-amber-100 transition disabled:opacity-50">ยืนยัน</button>
             </div>
         </div>
     </div>
@@ -1584,14 +1585,19 @@
             });
             document.getElementById('btn-reserve-confirm').addEventListener('click', async (e) => {
                 const button = e.currentTarget;
+                const cancelButton = document.getElementById('btn-reserve-cancel');
                 button.disabled = true;
+                cancelButton.disabled = true;
+                button.textContent = 'กำลังบันทึก…';
                 try {
                     await saveReserveShift();
                 } catch (error) {
                     console.warn('Cannot save reserve shift', error);
-                    showTransientStatus('บันทึกล้มเหลว: ระบบทำงานผิดพลาด', 'bg-red-600 text-white', 8000);
+                    setReserveSaveStatus('เกิดข้อผิดพลาดระหว่างบันทึกตัวสำรอง');
                 } finally {
                     button.disabled = false;
+                    cancelButton.disabled = false;
+                    button.textContent = 'ยืนยัน';
                 }
             });
             document.getElementById('btn-promote-skip').addEventListener('click', () => {
@@ -2271,7 +2277,8 @@
             const {
                 refresh = true,
                 successText = 'บันทึกสำเร็จ',
-                failureText = 'บันทึกล้มเหลว'
+                failureText = 'บันทึกล้มเหลว',
+                onFailure
             } = options;
             const payload = {
                 timestamp: detail.timestamp || new Date().toISOString(),
@@ -2292,7 +2299,10 @@
                 requestWritesInFlight -= 1;
             }
             if (!result.ok) {
-                showTransientStatus(result.message || failureText, 'bg-red-600 text-white', 8000);
+                const message = result.message || failureText;
+                const statusStyle = result.code === 'QUOTA_FULL' ? 'bg-amber-500 text-white' : 'bg-red-600 text-white';
+                showTransientStatus(message, statusStyle, 8000);
+                onFailure?.({ ...result, message });
                 scheduleRealtimeRefresh(250);
                 return false;
             }
@@ -2949,19 +2959,28 @@
 
             const quotaLimit = getQuotaLimit(user.level);
             const isQuotaAvailable = requestedDates.every((date) => getApprovedCount(date, user.department, user.position, user.level) < quotaLimit);
+            const draft = {
+                userId: user.id,
+                name: user.name,
+                startDate,
+                endDate,
+                dates: requestedDates,
+                department: user.department,
+                position: user.position,
+                level: user.level,
+                leaveType,
+                trainingNote
+            };
+            const offerReserve = () => {
+                pendingReserveData = draft;
+                setReserveSaveStatus('');
+                document.getElementById('reserve-modal').classList.remove('hidden');
+            };
+
             if (isQuotaAvailable) {
                 const newRequest = {
+                    ...draft,
                     id: createUniqueRequestId(),
-                    userId: user.id,
-                    name: user.name,
-                    startDate,
-                    endDate,
-                    dates: requestedDates,
-                    department: user.department,
-                    position: user.position,
-                    level: user.level,
-                    leaveType,
-                    trainingNote,
                     status: 'Approved',
                     timestamp: new Date()
                 };
@@ -2969,7 +2988,10 @@
                 shiftRequests.push(newRequest);
                 const saved = await logAction('CREATE_APPROVED_REQUEST', getRequestLogDetail(newRequest), {
                     successText: 'บันทึกคำขอเวรสำเร็จ',
-                    failureText: 'บันทึกคำขอเวรไม่สำเร็จ'
+                    failureText: 'บันทึกคำขอเวรไม่สำเร็จ',
+                    onFailure: (result) => {
+                        if (result.code === 'QUOTA_FULL') offerReserve();
+                    }
                 });
                 if (!saved) {
                     shiftRequests = beforeRequests;
@@ -2979,19 +3001,7 @@
                 }
                 alert('ยื่นคำขอเวรสำเร็จ (ได้รับโควตาแบบปกติ)');
             } else {
-                pendingReserveData = {
-                    userId: user.id,
-                    name: user.name,
-                    startDate,
-                    endDate,
-                    dates: requestedDates,
-                    department: user.department,
-                    position: user.position,
-                    level: user.level,
-                    leaveType,
-                    trainingNote
-                };
-                document.getElementById('reserve-modal').classList.remove('hidden');
+                offerReserve();
             }
 
             showCalendarMonth(startDate);
@@ -2999,34 +3009,30 @@
             renderAdminReserveQueue();
         }
 
+        function setReserveSaveStatus(message) {
+            const status = document.getElementById('reserve-save-status');
+            status.textContent = message;
+            status.hidden = !message;
+        }
+
         async function saveReserveShift() {
             if (!pendingReserveData) return;
+            setReserveSaveStatus('');
             const newRequest = {
-                id: createUniqueRequestId(),
-                userId: pendingReserveData.userId,
-                name: pendingReserveData.name,
-                startDate: pendingReserveData.startDate,
-                endDate: pendingReserveData.endDate,
-                dates: pendingReserveData.dates,
-                department: pendingReserveData.department,
-                position: pendingReserveData.position,
-                level: pendingReserveData.level,
-                leaveType: pendingReserveData.leaveType,
-                trainingNote: pendingReserveData.trainingNote,
+                ...pendingReserveData,
+                id: pendingReserveData.id ?? createUniqueRequestId(),
                 status: 'Pending',
-                timestamp: new Date()
+                timestamp: pendingReserveData.timestamp || new Date()
             };
-            const beforeRequests = cloneShiftRequestsSnapshot();
-            shiftRequests.push(newRequest);
+            pendingReserveData = newRequest;
             const saved = await logAction('CREATE_PENDING_REQUEST', getRequestLogDetail(newRequest), {
                 successText: 'บันทึกตัวสำรองสำเร็จ',
-                failureText: 'บันทึกตัวสำรองไม่สำเร็จ'
+                failureText: 'บันทึกตัวสำรองไม่สำเร็จ',
+                onFailure: ({ message }) => setReserveSaveStatus(message)
             });
-            if (!saved) {
-                shiftRequests = beforeRequests;
-                renderCalendar();
-                renderAdminReserveQueue();
-                return;
+            if (!saved) return;
+            if (!shiftRequests.some((request) => String(request.id) === String(newRequest.id))) {
+                shiftRequests.push(newRequest);
             }
             document.getElementById('reserve-modal').classList.add('hidden');
             pendingReserveData = null;

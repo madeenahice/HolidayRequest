@@ -41,7 +41,7 @@ const STAFF_CATALOG_DEFAULTS = {
   position: ['พนักงานทั่วไป'],
   level: []
 };
-const SCRIPT_VERSION = '2026-11-20-confirmed-writes-open-window';
+const SCRIPT_VERSION = '2026-11-20-request-quota';
 const THAI_MONTH_INDEX = {
   'มกราคม': 0,
   'ม.ค.': 0,
@@ -184,11 +184,11 @@ function doGet(e) {
       }
 
       const detail = JSON.parse(params.detail || '{}');
-      syncRequest_(writeAction, detail, params.timestamp || new Date().toISOString());
+      const result = syncRequest_(writeAction, detail, params.timestamp, params);
+      if (!result.ok) return createJsonpResponse_(params.callback, result);
       return createJsonpResponse_(params.callback, {
-        ok: true,
+        ...result,
         action: writeAction,
-        requestId: detail.requestId || '',
         timestamp: new Date().toISOString()
       });
     } catch (error) {
@@ -241,12 +241,11 @@ function doPost(e) {
     if (payload.action === 'SAVE_REQUEST_RULES') {
       result = saveRequestRules_(detail.rules || {});
     } else if (REQUEST_ACTIONS.includes(payload.action)) {
-      syncRequest_(payload.action, detail, detail.timestamp || payload.timestamp);
-      result = { ok: true, requestId: detail.requestId };
+      result = syncRequest_(payload.action, detail, detail.timestamp || payload.timestamp, payload);
     } else {
       return createJsonResponse_({ ok: false, message: 'Invalid request action' });
     }
-    appendAdminAuditLog_(payload.action, detail, payload);
+    if (result.ok) appendAdminAuditLog_(payload.action, detail, payload);
     return createJsonResponse_(result);
   } catch (error) {
     return createJsonResponse_({ ok: false, message: error && error.message ? error.message : String(error) });
@@ -880,8 +879,7 @@ function formatDateParts_(year, month, day) {
   return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 }
 
-function getRequestData_(window = null) {
-  const spreadsheet = getSpreadsheet_();
+function getRequestData_(window = null, spreadsheet = getSpreadsheet_()) {
   const sheets = getAllRequestSheets_(spreadsheet);
   const requestById = {};
 
@@ -939,18 +937,51 @@ function getRequestRowsFromSheet_(sheet) {
     .filter((item) => item.request.id && item.request.name && item.request.startDate && item.request.endDate && item.request.status);
 }
 
-function syncRequest_(action, detail, clientTimestamp) {
+function syncRequest_(action, detail, clientTimestamp, actor = {}) {
   const requestId = String(detail.requestId || '').trim();
   if (!requestId) throw new Error('ไม่พบรหัสคำขอเวร');
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
     const spreadsheet = getSpreadsheet_();
-    const sheet = getRequestSheet_(spreadsheet, detail.startDate || detail.endDate || clientTimestamp);
-    const matchingRows = findRequestRows_(spreadsheet, requestId);
-    if (isDuplicateCreateRequest_(spreadsheet, action, detail, requestId)) {
-      throw new Error('มีคำขอเวรวันที่เลือกอยู่แล้ว ยกเว้นคำขอยกเลิก');
+    if (['CREATE_APPROVED_REQUEST', 'CREATE_PENDING_REQUEST'].includes(action)) {
+      const requests = getRequestData_(null, spreadsheet).requests;
+      let hasSharedUserId;
+      const matchesUser = (request) => isSameUserForDuplicate_(request, detail, (userId) => {
+        if (hasSharedUserId === undefined) {
+          hasSharedUserId = getStaffRecords_(getStaffSheet_()).filter(({ user }) => String(user.id).trim() === userId).length > 1;
+        }
+        return hasSharedUserId;
+      });
+      if (action === 'CREATE_PENDING_REQUEST') {
+        const existing = requests.find((request) => String(request.id).trim() === requestId);
+        if (existing) {
+          const sameRequest = matchesUser(existing)
+            && existing.startDate === detail.startDate
+            && existing.endDate === detail.endDate
+            && existing.leaveType === detail.leaveType;
+          if (sameRequest && ['Pending', 'Approved'].includes(existing.status)) {
+            return { ok: true, requestId: detail.requestId };
+          }
+          return { ok: false, message: 'รหัสคำขอนี้ถูกใช้แล้ว กรุณาตรวจสอบรายการล่าสุด' };
+        }
+      }
+      if (isDuplicateCreateRequest_(requests, detail, requestId, matchesUser)) {
+        throw new Error('มีคำขอเวรวันที่เลือกอยู่แล้ว ยกเว้นคำขอยกเลิก');
+      }
+      const standardApproval = action === 'CREATE_APPROVED_REQUEST'
+        && !getVerifiedAdminUserId_(actor.actorUserId, actor.adminSessionToken);
+      if (standardApproval && !hasApprovedRequestQuota_(requests, detail, requestId)) {
+        return { ok: false, code: 'QUOTA_FULL', message: 'โควต้าเต็ม สามารถยื่นเป็นตัวสำรองได้' };
+      }
     }
+    const matchingRows = findRequestRows_(spreadsheet, requestId);
+    const sheet = getRequestSheet_(spreadsheet, detail.startDate || detail.endDate || clientTimestamp);
+    const status = {
+      CREATE_APPROVED_REQUEST: 'Approved',
+      CREATE_PENDING_REQUEST: 'Pending',
+      DELETE_REQUEST: 'cancle'
+    }[action] || detail.status || '';
     const row = [
       detail.name || '',
       detail.department || '',
@@ -959,7 +990,7 @@ function syncRequest_(action, detail, clientTimestamp) {
       detail.leaveType || '',
       detail.startDate || '',
       detail.endDate || '',
-      action === 'DELETE_REQUEST' ? 'cancle' : (detail.status || ''),
+      status,
       requestId,
       detail.userId || '',
       detail.trainingNote || '',
@@ -976,6 +1007,7 @@ function syncRequest_(action, detail, clientTimestamp) {
       sheet.appendRow(row);
     }
     SpreadsheetApp.flush();
+    return { ok: true, requestId: detail.requestId };
   } finally {
     lock.releaseLock();
   }
@@ -992,13 +1024,16 @@ function getDateRange_(startDate, endDate) {
   return dates;
 }
 
-function isSameUserForDuplicate_(request, detail) {
+function isSameUserForDuplicate_(request, detail, hasSharedUserId) {
   const requestUserId = String(request.userId || '').trim();
   const detailUserId = String(detail.userId || '').trim();
-  if (requestUserId && detailUserId) return requestUserId === detailUserId;
 
   const requestName = normalizeName_(request.name);
   const detailName = normalizeName_(detail.name);
+  if (requestUserId && detailUserId) {
+    return requestUserId === detailUserId
+      && (requestName === detailName || !hasSharedUserId(detailUserId));
+  }
   return Boolean(
     requestName
     && detailName
@@ -1008,20 +1043,31 @@ function isSameUserForDuplicate_(request, detail) {
   );
 }
 
-function isDuplicateCreateRequest_(spreadsheet, action, detail, requestId) {
-  if (!['CREATE_APPROVED_REQUEST', 'CREATE_PENDING_REQUEST'].includes(action)) return false;
+function isDuplicateCreateRequest_(requests, detail, requestId, matchesUser) {
   if (String(detail.leaveType || '').trim() === 'ยกเลิก') return false;
 
-  const requestedDates = new Set(getDateRange_(detail.startDate, detail.endDate));
-  if (!requestedDates.size) return false;
-
-  return getAllRequestSheets_(spreadsheet).some((sheet) => getRequestRowsFromSheet_(sheet).some(({ request }) => (
+  const endDate = detail.endDate || detail.startDate;
+  return requests.some((request) => (
     String(request.id || '').trim() !== String(requestId)
     && !['cancel', 'cancle'].includes(String(request.status || '').trim().toLowerCase())
     && String(request.leaveType || '').trim() !== 'ยกเลิก'
-    && isSameUserForDuplicate_(request, detail)
-    && getDateRange_(request.startDate, request.endDate).some((date) => requestedDates.has(date))
-  )));
+    && request.startDate <= endDate && request.endDate >= detail.startDate
+    && matchesUser(request)
+  ));
+}
+
+function hasApprovedRequestQuota_(requests, detail, requestId) {
+  const limit = detail.level === 'Level 5' ? 3 : 2;
+  const approved = requests.filter((request) => (
+    String(request.id).trim() !== requestId
+    && request.status === 'Approved'
+    && request.department === detail.department
+    && request.position === detail.position
+    && request.level === detail.level
+  ));
+  return getDateRange_(detail.startDate, detail.endDate).every((date) => (
+    approved.filter((request) => request.startDate <= date && request.endDate >= date).length < limit
+  ));
 }
 
 function migrateLegacyRequestsToFiscalSheets() {
