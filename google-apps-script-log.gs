@@ -41,7 +41,7 @@ const STAFF_CATALOG_DEFAULTS = {
   position: ['พนักงานทั่วไป'],
   level: []
 };
-const SCRIPT_VERSION = '2026-11-18-manage-staff';
+const SCRIPT_VERSION = '2026-11-20-confirmed-writes-open-window';
 const THAI_MONTH_INDEX = {
   'มกราคม': 0,
   'ม.ค.': 0,
@@ -137,11 +137,12 @@ function doGet(e) {
   }
 
   if (params.action === 'bootstrap') {
-    return createJsonpResponse_(params.callback, getBootstrapData_());
+    return createJsonpResponse_(params.callback, getBootstrapData_(params.scope === 'open'));
   }
 
   if (params.action === 'getRequests') {
-    return createJsonpResponse_(params.callback, getRequestData_());
+    const window = params.scope === 'open' ? getOpenRequestWindow_(getRequestRulesData_().rules) : null;
+    return createJsonpResponse_(params.callback, getRequestData_(window));
   }
 
   if (params.action === 'getPublicHolidays') {
@@ -233,27 +234,28 @@ function doGet(e) {
 }
 
 function doPost(e) {
-  const payload = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-  const detail = payload.detail || {};
-
-  if (payload.action === 'SAVE_REQUEST_RULES') {
-    saveRequestRules_(detail.rules || {});
+  try {
+    const payload = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    const detail = payload.detail || {};
+    let result;
+    if (payload.action === 'SAVE_REQUEST_RULES') {
+      result = saveRequestRules_(detail.rules || {});
+    } else if (REQUEST_ACTIONS.includes(payload.action)) {
+      syncRequest_(payload.action, detail, detail.timestamp || payload.timestamp);
+      result = { ok: true, requestId: detail.requestId };
+    } else {
+      return createJsonResponse_({ ok: false, message: 'Invalid request action' });
+    }
     appendAdminAuditLog_(payload.action, detail, payload);
-    return ContentService
-      .createTextOutput(JSON.stringify({ ok: true }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return createJsonResponse_(result);
+  } catch (error) {
+    return createJsonResponse_({ ok: false, message: error && error.message ? error.message : String(error) });
   }
+}
 
-  if (REQUEST_ACTIONS.includes(payload.action)) {
-    syncRequest_(payload.action, detail, payload.timestamp);
-    appendAdminAuditLog_(payload.action, detail, payload);
-    return ContentService
-      .createTextOutput(JSON.stringify({ ok: true }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-
+function createJsonResponse_(data) {
   return ContentService
-    .createTextOutput(JSON.stringify({ ok: true }))
+    .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -394,14 +396,15 @@ function makeStaffData_(users, catalog) {
   };
 }
 
-function getBootstrapData_() {
+function getBootstrapData_(openOnly) {
+  const requestRules = getRequestRulesData_();
   return {
     ok: true,
     version: SCRIPT_VERSION,
     staff: getStaffData_(),
-    requests: getRequestData_(),
+    requests: getRequestData_(openOnly ? getOpenRequestWindow_(requestRules.rules) : null),
     holidays: getPublicHolidayData_(),
-    requestRules: getRequestRulesData_()
+    requestRules
   };
 }
 
@@ -418,13 +421,23 @@ function getStaffCatalog_() {
 }
 
 function getStaffLevelEffectiveDate_() {
+  return getFirstOpenRequestMonth_(getRequestRulesData_().rules.earlyCloseRules);
+}
+
+function getOpenRequestWindow_(rules) {
+  const startDate = getFirstOpenRequestMonth_(rules.earlyCloseRules);
+  const [year, month] = startDate.split('-').map(Number);
+  const endDate = new Date(Date.UTC(year, month + 5, 0)).toISOString().slice(0, 10);
+  return { startDate, endDate };
+}
+
+function getFirstOpenRequestMonth_(earlyCloseRules) {
   const today = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd');
   const [year, month] = today.split('-').map(Number);
-  const rules = getRequestRulesData_().rules.earlyCloseRules;
   for (let offset = 0; ; offset += 1) {
     const monthKey = new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 7);
     const standardDeadline = new Date(Date.UTC(year, month - 3 + offset, 25)).toISOString().slice(0, 10);
-    const deadline = rules.filter((rule) => rule.requestMonth === monthKey)
+    const deadline = earlyCloseRules.filter((rule) => rule.requestMonth === monthKey)
       .reduce((earliest, rule) => rule.closeDate < earliest ? rule.closeDate : earliest, standardDeadline);
     if (today <= deadline) return monthKey + '-01';
   }
@@ -867,7 +880,7 @@ function formatDateParts_(year, month, day) {
   return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 }
 
-function getRequestData_() {
+function getRequestData_(window = null) {
   const spreadsheet = getSpreadsheet_();
   const sheets = getAllRequestSheets_(spreadsheet);
   const requestById = {};
@@ -884,11 +897,13 @@ function getRequestData_() {
 
   const requests = Object.values(requestById)
     .filter((request) => request.id && request.name && request.startDate && request.endDate && request.status)
+    .filter((request) => !window || (request.startDate <= window.endDate && request.endDate >= window.startDate))
     .sort((a, b) => getTimestampValue_(a.timestamp) - getTimestampValue_(b.timestamp));
 
   return {
     ok: true,
     requests,
+    ...(window ? { requestWindow: window } : {}),
     requestSheets: sheets.map((sheet) => sheet.getName())
   };
 }
@@ -925,13 +940,12 @@ function getRequestRowsFromSheet_(sheet) {
 }
 
 function syncRequest_(action, detail, clientTimestamp) {
+  const requestId = String(detail.requestId || '').trim();
+  if (!requestId) throw new Error('ไม่พบรหัสคำขอเวร');
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
     const spreadsheet = getSpreadsheet_();
-    const requestId = String(detail.requestId || '').trim();
-    if (!requestId) return;
-
     const sheet = getRequestSheet_(spreadsheet, detail.startDate || detail.endDate || clientTimestamp);
     const matchingRows = findRequestRows_(spreadsheet, requestId);
     if (isDuplicateCreateRequest_(spreadsheet, action, detail, requestId)) {

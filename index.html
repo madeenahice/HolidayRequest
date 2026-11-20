@@ -874,7 +874,11 @@
         let lastPublicHolidaySignature = '';
         let lastRealtimeConnected = false;
         let lastRealtimeCount = 0;
-        let realtimeLoadInFlight = false;
+        let requestReadInFlight = null;
+        let initialDataPromise = null;
+        let hasFullRequestHistory = false;
+        let requestWritesInFlight = 0;
+        let requestWriteRevision = 0;
         let staffChangeInFlight = false;
         let staffDataRevision = 0;
         let isInitialDataLoading = false;
@@ -887,7 +891,6 @@
         const JSONP_LIGHT_READ_TIMEOUT_MS = 35000;
         const JSONP_REQUEST_READ_TIMEOUT_MS = 60000;
         const JSONP_READ_RETRIES = 2;
-        const WRITE_VERIFY_TIMEOUT_MS = 3000;
 
         const levelColors = {
             'Level 1': { bg: 'bg-sky-50 text-sky-700 border-sky-200', dot: 'bg-sky-500' },
@@ -963,13 +966,14 @@
             renderLevelLegend();
             loadDutyStaffingSettings();
             refreshViewsAfterDataLoad();
-            startRealtimeSync();
-            loadInitialData().then(() => {
+            initialDataPromise = loadInitialData().then(() => {
                 refreshViewsAfterDataLoad();
             }).catch((error) => {
                 console.warn('Initial data load failed', error);
                 showTransientStatus('กำลังรอ sync ข้อมูลจาก Google Sheet', 'bg-amber-500 text-white', 8000);
             });
+            await initialDataPromise;
+            startRealtimeSync();
         });
 
         function refreshViewsAfterDataLoad() {
@@ -1365,6 +1369,7 @@
                         alert(adminCheck.message);
                         return;
                     }
+                    if (!await ensureFullRequestHistory()) return;
                     currentAdminUserId = adminCheck.userId || credentials.userId.trim();
                     currentAdminSessionToken = adminCheck.sessionToken || '';
                     setRole('admin');
@@ -1376,11 +1381,13 @@
             document.getElementById('btn-prev-month').addEventListener('click', () => {
                 currentDate.setMonth(currentDate.getMonth() - 1);
                 renderCalendar();
+                loadHistoryForCalendarMonth();
             });
 
             document.getElementById('btn-next-month').addEventListener('click', () => {
                 currentDate.setMonth(currentDate.getMonth() + 1);
                 renderCalendar();
+                loadHistoryForCalendarMonth();
             });
             window.addEventListener('resize', () => {
                 const compactMode = isCompactCalendarViewport();
@@ -1394,12 +1401,22 @@
                 }
             });
 
-            document.getElementById('shift-form').addEventListener('submit', (e) => {
+            document.getElementById('shift-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
-                handleShiftRequest().catch((error) => {
+                const submitButton = e.currentTarget.querySelector('[type="submit"]');
+                if (submitButton.disabled) return;
+                submitButton.disabled = true;
+                try {
+                    if (await ensureFullRequestHistory()) await handleShiftRequest();
+                } catch (error) {
                     console.warn('Cannot submit shift request', error);
                     showTransientStatus('บันทึกล้มเหลว: ระบบทำงานผิดพลาด', 'bg-red-600 text-white', 8000);
-                });
+                } finally {
+                    submitButton.disabled = false;
+                }
+            });
+            document.getElementById('request-summary-section').addEventListener('toggle', (e) => {
+                if (e.currentTarget.open) ensureFullRequestHistory({ silent: true }).catch(handleAsyncActionError);
             });
             document.getElementById('form-department-select').addEventListener('change', () => {
                 renderPositionDropdowns({ resetPosition: true });
@@ -1565,21 +1582,33 @@
                 document.getElementById('reserve-modal').classList.add('hidden');
                 pendingReserveData = null;
             });
-            document.getElementById('btn-reserve-confirm').addEventListener('click', () => {
-                saveReserveShift().catch((error) => {
+            document.getElementById('btn-reserve-confirm').addEventListener('click', async (e) => {
+                const button = e.currentTarget;
+                button.disabled = true;
+                try {
+                    await saveReserveShift();
+                } catch (error) {
                     console.warn('Cannot save reserve shift', error);
                     showTransientStatus('บันทึกล้มเหลว: ระบบทำงานผิดพลาด', 'bg-red-600 text-white', 8000);
-                });
+                } finally {
+                    button.disabled = false;
+                }
             });
             document.getElementById('btn-promote-skip').addEventListener('click', () => {
                 document.getElementById('promote-modal').classList.add('hidden');
                 pendingPromoteData = null;
             });
-            document.getElementById('btn-promote-confirm').addEventListener('click', () => {
-                executePromote().catch((error) => {
+            document.getElementById('btn-promote-confirm').addEventListener('click', async (e) => {
+                const button = e.currentTarget;
+                button.disabled = true;
+                try {
+                    await executePromote();
+                } catch (error) {
                     console.warn('Cannot promote reserve request', error);
                     showTransientStatus('บันทึกล้มเหลว: ระบบทำงานผิดพลาด', 'bg-red-600 text-white', 8000);
-                });
+                } finally {
+                    button.disabled = false;
+                }
             });
             document.getElementById('btn-day-detail-close').addEventListener('click', () => {
                 document.getElementById('day-detail-modal').classList.add('hidden');
@@ -1805,38 +1834,38 @@
 
         async function loadInitialData() {
             isInitialDataLoading = true;
-            const response = await requestAppsScriptJsonpWithRetry('bootstrap', {}, {
-                timeoutMs: JSONP_REQUEST_READ_TIMEOUT_MS,
-                retries: 1,
-                retryDelayMs: 1200
-            });
+            try {
+                const response = await requestAppsScriptJsonpWithRetry('bootstrap', { scope: 'open' }, {
+                    timeoutMs: JSONP_REQUEST_READ_TIMEOUT_MS,
+                    retries: 1,
+                    retryDelayMs: 1200
+                });
 
-            if (!response || !response.ok || !response.staff || !response.requests) {
+                if (!response?.ok || !response.staff || !response.requests?.ok) {
+                    await Promise.all([
+                        loadStaffFromSheet(),
+                        loadPublicHolidaysFromSheet({ silent: true }),
+                        loadRequestRulesFromSheet({ silent: true })
+                    ]);
+                    return await loadShiftRequestsFromSheet({ silent: false, openOnly: true });
+                }
+
+                applyStaffData(response.staff);
+
+                if (response.holidays?.ok && response.holidays.holidays) {
+                    applyPublicHolidays(response.holidays.holidays);
+                }
+                if (response.requestRules?.ok && response.requestRules.rules) {
+                    applyRequestRules(response.requestRules.rules);
+                }
+
+                shiftRequests = normalizeLoadedRequests(response.requests, true);
+                lastRealtimeSignature = getRealtimeSignature(shiftRequests);
+                updateRealtimeStatus(true, shiftRequests.length);
+                return true;
+            } finally {
                 isInitialDataLoading = false;
-                await loadStaffFromSheet();
-                await Promise.all([
-                    loadPublicHolidaysFromSheet({ silent: true }),
-                    loadRequestRulesFromSheet({ silent: true })
-                ]);
-                await loadShiftRequestsFromSheet({ silent: false });
-                return false;
             }
-
-            applyStaffData(response.staff);
-
-            if (response.holidays && response.holidays.ok && response.holidays.holidays) {
-                applyPublicHolidays(response.holidays.holidays);
-            }
-            if (response.requestRules && response.requestRules.ok && response.requestRules.rules) {
-                applyRequestRules(response.requestRules.rules);
-            }
-
-            const nextRequests = normalizeShiftRequests(response.requests.requests || []);
-            shiftRequests = nextRequests;
-            lastRealtimeSignature = getRealtimeSignature(nextRequests);
-            updateRealtimeStatus(true, nextRequests.length);
-            isInitialDataLoading = false;
-            return true;
         }
 
         async function loadStaffFromSheet() {
@@ -1966,9 +1995,9 @@
             return true;
         }
 
-        async function saveRequestRulesToSheet() {
-            const rules = normalizeRequestRules(requestRules);
-            const saved = await postAppsScriptNoCors({
+        async function saveRequestRulesToSheet(nextRules) {
+            const rules = normalizeRequestRules(nextRules);
+            const response = await postAppsScript({
                 timestamp: new Date().toISOString(),
                 role: currentRole,
                 actorUserId: currentRole === 'admin' ? currentAdminUserId : '',
@@ -1976,14 +2005,14 @@
                 action: 'SAVE_REQUEST_RULES',
                 detail: { rules }
             });
-            if (!saved) {
-                showTransientStatus('บันทึกกฎการเปิดรับไม่สำเร็จ', 'bg-red-600 text-white', 8000);
+            if (!response.ok) {
+                showTransientStatus(response.message || 'บันทึกกฎการเปิดรับไม่สำเร็จ', 'bg-red-600 text-white', 8000);
+                await loadRequestRulesFromSheet({ silent: true });
                 return false;
             }
 
-            applyRequestRules(rules);
+            applyRequestRules(response.rules || rules);
             showTransientStatus('บันทึกกฎการเปิดรับสำเร็จ', 'bg-emerald-600 text-white');
-            setTimeout(() => loadRequestRulesFromSheet({ silent: true }), 1500);
             return true;
         }
 
@@ -2067,37 +2096,72 @@
             ]));
         }
 
-        async function loadShiftRequestsFromSheet({ silent = true } = {}) {
-            if (realtimeLoadInFlight || staffChangeInFlight) return true;
-            realtimeLoadInFlight = true;
-            const staffRevision = staffDataRevision;
-            try {
-                const response = await requestAppsScriptJsonpWithRetry('getRequests', {}, {
-                    timeoutMs: JSONP_REQUEST_READ_TIMEOUT_MS
-                });
-                if (staffChangeInFlight || staffRevision !== staffDataRevision) return false;
-                if (!response || !response.ok) {
-                    updateRealtimeStatus(false);
-                    if (!silent) alert(response?.message || 'โหลดข้อมูลคำขอเวรจาก Google Sheet ไม่สำเร็จ');
-                    return false;
-                }
+        function normalizeLoadedRequests(response, openOnly) {
+            const requests = response.requests || [];
+            if (!openOnly || response.requestWindow) return normalizeShiftRequests(requests);
+            const startDate = getFirstAllowedMonthStartDate();
+            const endDate = formatDateInput(getLastAllowedUserDate());
+            return normalizeShiftRequests(requests.filter((request) => {
+                const start = request.startDate || request.date;
+                const end = request.endDate || start;
+                return start <= endDate && end >= startDate;
+            }));
+        }
 
-                const nextRequests = normalizeShiftRequests(response.requests || []);
-                const nextSignature = getRealtimeSignature(nextRequests);
-                updateRealtimeStatus(true, nextRequests.length);
-                if (nextSignature === lastRealtimeSignature) return true;
+        async function ensureFullRequestHistory({ silent = false } = {}) {
+            if (hasFullRequestHistory) return true;
+            return loadShiftRequestsFromSheet({ silent });
+        }
 
-                shiftRequests = nextRequests;
-                lastRealtimeSignature = nextSignature;
-                renderCalendar();
-                renderAdminReserveQueue();
-                if (!document.getElementById('admin-heatmap-view').classList.contains('hidden')) {
-                    renderAdminHeatmap(false);
-                }
-                return true;
-            } finally {
-                realtimeLoadInFlight = false;
+        function loadHistoryForCalendarMonth() {
+            const month = formatDateInput(currentDate).slice(0, 7);
+            const firstMonth = getFirstAllowedMonthStartDate().slice(0, 7);
+            const lastMonth = formatDateInput(getLastAllowedUserDate()).slice(0, 7);
+            if (month < firstMonth || month > lastMonth) {
+                ensureFullRequestHistory({ silent: true }).catch(handleAsyncActionError);
             }
+        }
+
+        async function loadShiftRequestsFromSheet({ silent = true, openOnly = false } = {}) {
+            if (!openOnly) await initialDataPromise;
+            if (staffChangeInFlight || requestWritesInFlight) return false;
+            if (!requestReadInFlight) {
+                requestReadInFlight = refreshShiftRequestsFromSheet(openOnly).finally(() => {
+                    requestReadInFlight = null;
+                });
+            }
+            const result = await requestReadInFlight;
+            if (!result.ok && !silent) alert(result.message || 'โหลดข้อมูลคำขอเวรจาก Google Sheet ไม่สำเร็จ');
+            return result.ok;
+        }
+
+        async function refreshShiftRequestsFromSheet(openOnly) {
+            const staffRevision = staffDataRevision;
+            const writeRevision = requestWriteRevision;
+            const response = await requestAppsScriptJsonpWithRetry('getRequests', openOnly ? { scope: 'open' } : {}, {
+                timeoutMs: JSONP_REQUEST_READ_TIMEOUT_MS
+            });
+            if (staffRevision !== staffDataRevision || writeRevision !== requestWriteRevision) return { ok: false };
+            if (!response?.ok) {
+                updateRealtimeStatus(false);
+                return response || { ok: false };
+            }
+
+            if (!openOnly) hasFullRequestHistory = true;
+            const nextRequests = normalizeLoadedRequests(response, openOnly);
+            const nextSignature = getRealtimeSignature(nextRequests);
+            updateRealtimeStatus(true, nextRequests.length);
+            if (nextSignature === lastRealtimeSignature) return { ok: true };
+
+            shiftRequests = nextRequests;
+            lastRealtimeSignature = nextSignature;
+            renderCalendar();
+            renderRequestSummary();
+            renderAdminReserveQueue();
+            if (!document.getElementById('admin-heatmap-view').classList.contains('hidden')) {
+                renderAdminHeatmap(false);
+            }
+            return { ok: true };
         }
 
         function getRandomRealtimePollDelay() {
@@ -2170,31 +2234,29 @@
             showTransientStatus('บันทึกล้มเหลว: ระบบทำงานผิดพลาด', 'bg-red-600 text-white', 8000);
         }
 
-        function postAppsScriptNoCors(payload) {
-            if (!GOOGLE_SHEET_LOG_URL) return Promise.resolve(false);
-            return fetch(GOOGLE_SHEET_LOG_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify(payload)
-            })
-                .then(() => true)
-                .catch((error) => {
-                    console.warn('Cannot fallback write to Google Sheet', error);
-                    return false;
+        async function postAppsScript(payload) {
+            if (!GOOGLE_SHEET_LOG_URL) {
+                return { ok: false, message: 'ยังไม่ได้ตั้งค่า Google Apps Script Web App URL' };
+            }
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), JSONP_REQUEST_READ_TIMEOUT_MS);
+            try {
+                const response = await fetch(GOOGLE_SHEET_LOG_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
                 });
-        }
-
-        async function verifyWriteInBackground(action, detail, payload) {
-            const response = await requestAppsScriptJsonp('syncRequest', {
-                writeAction: action,
-                detail: JSON.stringify(detail),
-                role: currentRole,
-                actorUserId: payload.actorUserId || '',
-                adminSessionToken: payload.adminSessionToken || '',
-                timestamp: detail.timestamp || payload.timestamp
-            }, WRITE_VERIFY_TIMEOUT_MS);
-            return Boolean(response && response.ok);
+                if (!response.ok) throw new Error(`Apps Script HTTP ${response.status}`);
+                const result = await response.json();
+                if (result?.ok === true || result?.ok === false) return result;
+                throw new Error('Invalid Apps Script response');
+            } catch (error) {
+                console.warn('Cannot confirm write to Google Sheet', error);
+                return { ok: false, message: 'ยังไม่ได้รับผลยืนยันจาก Google Sheet กรุณาตรวจรายการก่อนส่งซ้ำ' };
+            } finally {
+                clearTimeout(timeoutId);
+            }
         }
 
         function scheduleRealtimeRefresh(delay = 600) {
@@ -2212,7 +2274,7 @@
                 failureText = 'บันทึกล้มเหลว'
             } = options;
             const payload = {
-                timestamp: new Date().toISOString(),
+                timestamp: detail.timestamp || new Date().toISOString(),
                 role: currentRole,
                 actorUserId: currentRole === 'admin' ? currentAdminUserId : '',
                 adminSessionToken: currentRole === 'admin' ? currentAdminSessionToken : '',
@@ -2220,35 +2282,23 @@
                 detail
             };
 
-            if (!GOOGLE_SHEET_LOG_URL) {
-                console.log('[log]', payload);
-                showTransientStatus(`${successText} (โหมดออฟไลน์)`, 'bg-emerald-600 text-white');
-                return true;
+            showTransientStatus('กำลังรอผลบันทึกจาก Google Sheet...', 'bg-amber-500 text-white', JSONP_REQUEST_READ_TIMEOUT_MS);
+            requestWritesInFlight += 1;
+            requestWriteRevision += 1;
+            let result;
+            try {
+                result = await postAppsScript(payload);
+            } finally {
+                requestWritesInFlight -= 1;
             }
-
-            showTransientStatus('กำลังบันทึก...', 'bg-amber-500 text-white', 5000);
-            const sent = await postAppsScriptNoCors(payload);
-            if (!sent) {
-                showTransientStatus(`${failureText}: เชื่อมต่อ Google Sheet ไม่สำเร็จ`, 'bg-red-600 text-white', 8000);
+            if (!result.ok) {
+                showTransientStatus(result.message || failureText, 'bg-red-600 text-white', 8000);
+                scheduleRealtimeRefresh(250);
                 return false;
             }
 
-            showTransientStatus(successText, 'bg-emerald-600 text-white');
-            if (refresh) {
-                scheduleRealtimeRefresh(250);
-            }
-
-            verifyWriteInBackground(action, detail, payload)
-                .then((verified) => {
-                    if (!verified) {
-                        showTransientStatus('ส่งบันทึกแล้ว รอ sync จาก Google Sheet', 'bg-amber-500 text-white', 6000);
-                    }
-                    if (refresh) scheduleRealtimeRefresh(1500);
-                })
-                .catch((error) => {
-                    console.warn('Cannot verify write quickly', error);
-                    if (refresh) scheduleRealtimeRefresh(1500);
-                });
+            if (successText) showTransientStatus(successText, 'bg-emerald-600 text-white');
+            if (refresh) scheduleRealtimeRefresh(250);
             return true;
         }
 
@@ -2827,7 +2877,6 @@
                     shiftRequests = beforeRequests;
                     renderCalendar();
                     renderAdminReserveQueue();
-                    alert('บันทึกคำขอยกเลิกลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
                     return;
                 }
                 alert('ส่งคำขอยกเลิกให้ Admin ยืนยันแล้ว');
@@ -2926,7 +2975,6 @@
                     shiftRequests = beforeRequests;
                     renderCalendar();
                     renderAdminReserveQueue();
-                    alert('บันทึกคำขอเวรลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
                     return;
                 }
                 alert('ยื่นคำขอเวรสำเร็จ (ได้รับโควตาแบบปกติ)');
@@ -2978,7 +3026,6 @@
                 shiftRequests = beforeRequests;
                 renderCalendar();
                 renderAdminReserveQueue();
-                alert('บันทึกตัวสำรองลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
                 return;
             }
             document.getElementById('reserve-modal').classList.add('hidden');
@@ -3008,7 +3055,6 @@
                 target.status = previousStatus;
                 renderCalendar();
                 renderAdminReserveQueue();
-                alert('บันทึกการอนุมัติลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
                 return;
             }
             alert(canApproveAllDates ? 'อนุมัติตัวสำรองเรียบร้อยแล้ว' : 'อนุมัติตัวสำรองเรียบร้อยแล้ว (Admin อนุมัติเกินโควต้า)');
@@ -3077,7 +3123,7 @@
             for (const item of writeActions) {
                 const saved = await logAction(item.action, item.detail, {
                     refresh: false,
-                    successText: 'บันทึกคำขอยกเลิกสำเร็จ',
+                    successText: null,
                     failureText: 'บันทึกคำขอยกเลิกไม่สำเร็จ'
                 });
                 if (!saved) {
@@ -3087,12 +3133,12 @@
                     if (!document.getElementById('admin-heatmap').classList.contains('hidden')) {
                         renderAdminHeatmap(false);
                     }
-                    alert('บันทึกคำขอยกเลิกลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
                     return;
                 }
             }
             await loadShiftRequestsFromSheet();
             scheduleNextRealtimePoll();
+            showTransientStatus('บันทึกคำขอยกเลิกสำเร็จ', 'bg-emerald-600 text-white');
             alert('ยืนยันคำขอยกเลิกเรียบร้อยแล้ว');
             renderCalendar();
             renderAdminReserveQueue();
@@ -3122,7 +3168,6 @@
                 failureText: 'บันทึกการลบไม่สำเร็จ'
             });
             if (!saved) {
-                alert('บันทึกการลบลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
                 return;
             }
             shiftRequests.splice(targetIndex, 1);
@@ -3174,7 +3219,6 @@
                     target.status = previousStatus;
                     renderCalendar();
                     renderAdminReserveQueue();
-                    alert('บันทึกการเลื่อนสิทธิ์ลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
                     return;
                 }
                 alert(canPromoteAllDates ? 'เลื่อนสิทธิ์ตัวสำรองให้เป็นตัวจริงเรียบร้อยแล้ว' : 'เลื่อนสิทธิ์ตัวสำรองให้เป็นตัวจริงเรียบร้อยแล้ว (Admin อนุมัติเกินโควต้า)');
@@ -3393,7 +3437,6 @@
                 if (previousDate) request.date = previousDate;
                 renderCalendar();
                 renderAdminReserveQueue();
-                alert('บันทึกการแก้ไขวันลง Google Sheet ไม่สำเร็จ กรุณาลองใหม่');
                 return;
             }
             showCalendarMonth(newStartDate);
@@ -3957,7 +4000,7 @@
                 return;
             }
 
-            requestRules.earlyCloseRules = [
+            const earlyCloseRules = [
                 ...(requestRules.earlyCloseRules || []).filter((rule) => rule.requestMonth !== requestMonth),
                 {
                     id: requestMonth,
@@ -3966,15 +4009,15 @@
                     reason
                 }
             ];
-            const saved = await saveRequestRulesToSheet();
+            const saved = await saveRequestRulesToSheet({ ...requestRules, earlyCloseRules });
             if (saved) {
                 document.getElementById('admin-early-close-reason').value = '';
             }
         };
 
         window.deleteEarlyCloseRule = async function(ruleId) {
-            requestRules.earlyCloseRules = (requestRules.earlyCloseRules || []).filter((rule) => rule.id !== ruleId);
-            await saveRequestRulesToSheet();
+            const earlyCloseRules = (requestRules.earlyCloseRules || []).filter((rule) => rule.id !== ruleId);
+            await saveRequestRulesToSheet({ ...requestRules, earlyCloseRules });
         };
 
         window.saveBlockedRequestDate = async function() {
@@ -3989,7 +4032,7 @@
                 return;
             }
 
-            requestRules.blockedDates = [
+            const blockedDates = [
                 ...(requestRules.blockedDates || []).filter((rule) => rule.date !== date),
                 {
                     id: date,
@@ -3997,15 +4040,15 @@
                     reason
                 }
             ];
-            const saved = await saveRequestRulesToSheet();
+            const saved = await saveRequestRulesToSheet({ ...requestRules, blockedDates });
             if (saved) {
                 document.getElementById('admin-blocked-request-reason').value = '';
             }
         };
 
         window.deleteBlockedRequestDate = async function(ruleId) {
-            requestRules.blockedDates = (requestRules.blockedDates || []).filter((rule) => rule.id !== ruleId);
-            await saveRequestRulesToSheet();
+            const blockedDates = (requestRules.blockedDates || []).filter((rule) => rule.id !== ruleId);
+            await saveRequestRulesToSheet({ ...requestRules, blockedDates });
         };
 
         function renderAdminAddPanel() {
